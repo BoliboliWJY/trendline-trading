@@ -3,7 +3,7 @@ from binance.spot import Spot as Client
 import time
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
-
+import time
 #%%
 from math import ceil
 import numpy as np
@@ -76,7 +76,7 @@ def get_data_in_batches(client,coin_type,interval,total_length,current_time,limi
       
     # 原始数据排列顺序为：[0]开盘时间、[1]开盘价、[2]最高价、[3]最低价、[4]收盘价(当前K线未结束的即为最新价)、[5]成交量、[6]收盘时间、[7]成交额、[8]成交笔数、[9]主动买入成交量、[10]主动买入成交额、[11]请忽略该参数
     data[:,0] = (data[:,0] + data[:,6]) / 2 #取时间中值,减小误差
-    data = data[:, [0, 2, 3]].astype(float)#Ave_ime,High,Low
+    data = data[:, [0, 2, 3, 1, 4]].astype(float)#Ave_ime,High,Low
     # if(interval == '1s'):
     # data = data_compression(data)
     # data = data[:,[0,1]]
@@ -89,17 +89,21 @@ def get_data_in_batches(client,coin_type,interval,total_length,current_time,limi
 key = 'uiY3WGKVNEaCkntmyikLCALO9O63PBAYcVDwLw0Xu66AgcrEBXab0UANMbWZOsj4'
 secret = 'O7zn1HEFTr0e9msT1m52Nu6utZtIkmicRsbUtpSJSdVJrTlLs2NIVLLhiwALXKez'
 client = Client(key, secret)
-coin_type = "BTCUSDT"
+coin_type = "BCHUSDT"
 
 mode = 'realtime' #'realtime' or 'backtest'
 threshold = 0.0005
-total_length = 500
+total_length = 2000
 interval = '1m'
 time_number(interval)
 current_time = int(time.time())
 limit = total_length if total_length < 1000 else 1000
 # limit = 10
+start_time = time.perf_counter()
 [data, type_data] = get_data_in_batches(client,coin_type,interval,total_length,current_time,limit)
+end_time = time.perf_counter()
+elapsed_time = end_time - start_time
+print(f"获取数据耗时: {elapsed_time:.6f} 秒")
 # plt.figure()
 # plt.plot(data[:,0])
 # plt.show()
@@ -240,7 +244,11 @@ def new_trend(data, update_trend_high, update_trend_low, initial_single_slope, t
         current_slope = trend_low[i][0][0]
         update_trend_low(data, trend_low = trend_low, current_idx = i, i = i - 1, current_slope=current_slope)
 
+
+loop_times = []
+
 if mode == 'realtime':
+    mean = sum(data[:, 1] - data[:, 2]) / len(data)
     trend_high = [SortedList(key=lambda x: x[0]) for _ in range(len(data))]
     idx_high = 1
     initial_slope(data, trend_high, idx_high)
@@ -252,11 +260,36 @@ if mode == 'realtime':
     idx_low = 2
     initial_slope(data, trend_low,idx_low)
     for i in range(2,len(data)):
+        
+        start_time = time.perf_counter()
+        
         current_slope = trend_low[i][0][0]
         update_trend_low(data, trend_low=trend_low, current_idx=i, i=i - 1, current_slope=current_slope, threshold=threshold)
         
+           # if i > total_length-20:
+        end_time = time.perf_counter()  # 记录结束时间
+        elapsed_time = end_time - start_time  # 计算耗时
+        loop_times.append(elapsed_time)  # 将耗时添加到列表中
+
+            # 可选：打印每次循环的耗时
+            # print(f"循环索引 {i} 耗时: {elapsed_time:.6f} 秒")
         
-    print('calculating sueeess')
+
+    """cumulative_times = np.cumsum(loop_times)
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
+    # 子图1：每次循环的耗时
+    ax1.plot(loop_times, color='blue')
+    ax1.grid(True)
+    # 子图2：累计耗时
+    ax2.plot(cumulative_times, color='green')
+    ax2.grid(True)
+    # 自动调整子图参数，防止标签重叠
+    plt.tight_layout()
+    # 显示图形
+    plt.show()"""
+    
+    print("calculating completed")
+    
     # plt.ion()
     plt.figure()
     # plt.plot(data[:,0],data[:,1],marker = '.',markersize = 3)
@@ -276,13 +309,29 @@ if mode == 'realtime':
             plt.plot(x_combined[2*i:2*i+2], y_combined[2*i:2*i+2], color='green')
         else:
             plt.plot(x_combined[2*i:2*i+2], y_combined[2*i:2*i+2], color='red')
+            
+    x = data[:, 0]
+    y1 = data[:, 3]
+    y2 = data[:, 4]
+    # 创建交替的 x 和 y 数据
+    x_combined = np.empty((x.size + x.size,), dtype=x.dtype)
+    y_combined = np.empty((y1.size + y2.size,), dtype=y1.dtype)
+    x_combined[0::2] = x
+    x_combined[1::2] = x
+    y_combined[0::2] = y1
+    y_combined[1::2] = y2
+    for i in range(len(data)):
+        if type_data[i]:
+            plt.plot(x_combined[2*i:2*i+2], y_combined[2*i:2*i+2],linewidth=3, color='green')
+        else:
+            plt.plot(x_combined[2*i:2*i+2], y_combined[2*i:2*i+2],linewidth=3, color='red')
     # plt.plot(x_combined, y_combined, marker='.', markersize=3)
     
     for i in range(1, len(data)-1):
         if type_data[i] != type_data[i - 1] or type_data[i] != type_data[i + 1]:
             for slope, j in trend_high[i]:
                 if type_data[j] != type_data[j-1] or type_data[j] != type_data[j+1]:
-                    if abs(slope) > threshold:
+                    if abs(slope) > threshold or type_data[j] == 0:
                         continue
                     start_point = data[j, [0, 1]]
                     end_point = data[i, [0, 1]]
@@ -290,7 +339,7 @@ if mode == 'realtime':
                     plt.axline(end_point, slope=m, color='red', linewidth=0.1, label=f'Slope = {m}  ')
             for slope, j in trend_low[i]:
                 if  type_data[j] != type_data[j-1] or type_data[j] != type_data[j+1]:
-                    if abs(slope) > threshold:
+                    if abs(slope) > threshold or type_data[j] == 1:
                         continue
                     point = data[i, [0, 2]]
                     m = slope
@@ -299,7 +348,7 @@ if mode == 'realtime':
         # plt.pause(1)  # 暂停以便观察更新，时间可以根据需要调整
 
     # plt.ioff()
-    visual_number = 100 #单图内可视化数量
+    visual_number = 500 #单图内可视化数量
     plt.xlim(current_time * 1000 - visual_number * time_number(interval) * 1000, current_time * 1000 + time_number(interval) * 1000)
     plt.ylim(min(data[-visual_number:,2])* 0.9995, max(data[-visual_number:,1])* 1.0005)
     plt.show()
@@ -369,5 +418,6 @@ elif mode == 'backtest':
 
 
 plt.show()
+
 
 #%%
