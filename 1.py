@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import time
 #%%
-from math import ceil
+from math import ceil,floor
 import numpy as np
 
 def time_number(interval):
@@ -89,12 +89,12 @@ def get_data_in_batches(client,coin_type,interval,total_length,current_time,limi
 key = 'uiY3WGKVNEaCkntmyikLCALO9O63PBAYcVDwLw0Xu66AgcrEBXab0UANMbWZOsj4'
 secret = 'O7zn1HEFTr0e9msT1m52Nu6utZtIkmicRsbUtpSJSdVJrTlLs2NIVLLhiwALXKez'
 client = Client(key, secret)
-coin_type = "BCHUSDT"
+coin_type = "BTCUSDT"
 
-mode = 'realtime' #'realtime' or 'backtest'
+mode = 'backtest' #'realtime' or 'backtest'
 threshold = 0.0005
-total_length = 2000
-interval = '1m'
+total_length = 1000
+interval = '3m'
 time_number(interval)
 current_time = int(time.time())
 limit = total_length if total_length < 1000 else 1000
@@ -197,8 +197,7 @@ def on_key(event):
             update_plot(trend_high=trend_high[i], trend_low=trend_low[i], i = i-1)
     elif event.key == 'escape':
         plt.close(fig)
-#%%
-# list_array = [[None]*3 for _ in range(3)]
+
 def remove_elements_above_threshold(trend_high, threshold):
     for current_idx in range(len(trend_high) - 1, -1, -1):
         current_list = trend_high[current_idx]
@@ -244,56 +243,13 @@ def new_trend(data, update_trend_high, update_trend_low, initial_single_slope, t
         current_slope = trend_low[i][0][0]
         update_trend_low(data, trend_low = trend_low, current_idx = i, i = i - 1, current_slope=current_slope)
 
+def price_visualize(data, type_data):
+    """plot the price with high and low data in plt
 
-loop_times = []
-
-if mode == 'realtime':
-    mean = sum(data[:, 1] - data[:, 2]) / len(data)
-    trend_high = [SortedList(key=lambda x: x[0]) for _ in range(len(data))]
-    idx_high = 1
-    initial_slope(data, trend_high, idx_high)
-    for i in range(2,len(data)):
-        current_slope = trend_high[i][0][0]
-        update_trend_high(data, trend_high=trend_high, current_idx=i, i=i - 1, current_slope=current_slope, threshold=threshold)
-
-    trend_low = [SortedList(key=lambda x: x[0]) for _ in range(len(data))]
-    idx_low = 2
-    initial_slope(data, trend_low,idx_low)
-    for i in range(2,len(data)):
-        
-        start_time = time.perf_counter()
-        
-        current_slope = trend_low[i][0][0]
-        update_trend_low(data, trend_low=trend_low, current_idx=i, i=i - 1, current_slope=current_slope, threshold=threshold)
-        
-           # if i > total_length-20:
-        end_time = time.perf_counter()  # 记录结束时间
-        elapsed_time = end_time - start_time  # 计算耗时
-        loop_times.append(elapsed_time)  # 将耗时添加到列表中
-
-            # 可选：打印每次循环的耗时
-            # print(f"循环索引 {i} 耗时: {elapsed_time:.6f} 秒")
-        
-
-    """cumulative_times = np.cumsum(loop_times)
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
-    # 子图1：每次循环的耗时
-    ax1.plot(loop_times, color='blue')
-    ax1.grid(True)
-    # 子图2：累计耗时
-    ax2.plot(cumulative_times, color='green')
-    ax2.grid(True)
-    # 自动调整子图参数，防止标签重叠
-    plt.tight_layout()
-    # 显示图形
-    plt.show()"""
-    
-    print("calculating completed")
-    
-    # plt.ion()
-    plt.figure()
-    # plt.plot(data[:,0],data[:,1],marker = '.',markersize = 3)
-    # plt.plot(data[:,0],data[:,2],marker = '.',markersize = 3)
+    Args:
+        data (np.array): market data
+        type_data (np.array(bool)): rise or fall, based on (open - close)
+    """
     x = data[:, 0]
     y1 = data[:, 1]
     y2 = data[:, 2]
@@ -325,8 +281,17 @@ if mode == 'realtime':
             plt.plot(x_combined[2*i:2*i+2], y_combined[2*i:2*i+2],linewidth=3, color='green')
         else:
             plt.plot(x_combined[2*i:2*i+2], y_combined[2*i:2*i+2],linewidth=3, color='red')
-    # plt.plot(x_combined, y_combined, marker='.', markersize=3)
-    
+
+def trend_visualize(threshold, data, type_data, trend_high, trend_low):
+    """visualize the trend data
+
+    Args:
+        threshold (int): the maxnium number of the slope
+        data (array): market data
+        type_data (array): rise or fall type
+        trend_high (array): slope data for rise
+        trend_low (array): slope data for fall
+    """
     for i in range(1, len(data)-1):
         if type_data[i] != type_data[i - 1] or type_data[i] != type_data[i + 1]:
             for slope, j in trend_high[i]:
@@ -344,80 +309,136 @@ if mode == 'realtime':
                     point = data[i, [0, 2]]
                     m = slope
                     plt.axline(point, slope=m, color='green', linewidth=0.1, label=f'Slope = {m}')
+
+# loop_times = []#计算耗时
+#%%
+# mean = sum(data[:, 1] - data[:, 2]) / len(data)
+def calculate_trend(threshold, data, update_trend_high, update_trend_low, trend_high, trend_low, start_idx):
+    """calculate rise/fall trend, it shall calculate the length of the data
+
+    Args:
+        threshold (double): maxinum number of slope
+        data (array): market data
+        update_trend_high (func): updating rise trend
+        update_trend_low (func): updating fall trend
+        trend_high (array): rise trend data
+        trend_low (array): fall trend data
+        start_idx (int): the beginning index for calculating, for realtime, it should be 2
+    """
+    for i in range(start_idx,len(data)):
+        # start_time = time.perf_counter()
+    #process high_time
+        current_slope = trend_high[i][0][0]
+        update_trend_high(data, trend_high=trend_high, current_idx=i, i=i - 1, current_slope=current_slope, threshold=threshold)
+    #process low_time
+        current_slope = trend_low[i][0][0]
+        update_trend_low(data, trend_low=trend_low, current_idx=i, i=i - 1, current_slope=current_slope, threshold=threshold)
+    
+    # end_time = time.perf_counter()  # 记录结束时间
+    # elapsed_time = end_time - start_time  # 计算耗时
+    # loop_times.append(elapsed_time)  # 将耗时添加到列表中
+    # 可选：打印每次循环的耗时
+    # print(f"循环索引 {i} 耗时: {elapsed_time:.6f} 秒")
+    # print("calculating completed")
+   
+"""cumulative_times = np.cumsum(loop_times)
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
+    # 子图1：每次循环的耗时
+    ax1.plot(loop_times, color='blue')
+    ax1.grid(True)
+    # 子图2：累计耗时
+    ax2.plot(cumulative_times, color='green')
+    ax2.grid(True)
+    # 自动调整子图参数，防止标签重叠
+    plt.tight_layout()
+    # 显示图形
+    plt.show()"""
+
+#%%
+mode = 'realtime'
+mode = 'backtest'
+if mode == 'realtime':
+    # plt.ion()
+    plt.figure()
+    # plt.plot(data[:,0],data[:,1],marker = '.',markersize = 3)
+    # plt.plot(data[:,0],data[:,2],marker = '.',markersize = 3)
+    price_visualize(data, type_data)
+    # plt.plot(x_combined, y_combined, marker='.', markersize=3)
+    
+    #initialize trend_high
+    trend_high = [SortedList(key=lambda x: x[0]) for _ in range(len(data))]
+    idx_high = 1
+    initial_slope(data, trend_high, idx_high)
+    #initialize trend_low
+    trend_low = [SortedList(key=lambda x: x[0]) for _ in range(len(data))]
+    idx_low = 2
+    initial_slope(data, trend_low,idx_low)
+    
+    start_time = time.perf_counter()
+    calculate_trend(threshold, data, update_trend_high, update_trend_low, trend_high, trend_low, 2)
+    end_time = time.perf_counter()
+    elapsed_time = end_time - start_time
+    print(f"实测耗时: {elapsed_time:.6f} 秒")
+    print("calculating completed")
+    
+    trend_visualize(threshold, data, type_data, trend_high, trend_low)
         # plt.draw()
         # plt.pause(1)  # 暂停以便观察更新，时间可以根据需要调整
 
     # plt.ioff()
-    visual_number = 500 #单图内可视化数量
+    visual_number = total_length if total_length < 500 else 500 #单图内可视化数量
     plt.xlim(current_time * 1000 - visual_number * time_number(interval) * 1000, current_time * 1000 + time_number(interval) * 1000)
     plt.ylim(min(data[-visual_number:,2])* 0.9995, max(data[-visual_number:,1])* 1.0005)
     plt.show()
+       
 elif mode == 'backtest':
-    # plt.ion()
-    # plt.figure()
-    # plt.plot(data[:,0],data[:,1],marker = '.',markersize = 20)
-    # plt.plot(data[:,0],data[:,2],marker = '.',markersize = 20)
-    
-    trend_high = [[SortedList(key=lambda x: x[0])] for _ in range(len(data))]
-    trend_low = [[SortedList(key=lambda x: x[0])] for _ in range(len(data))]
     idx_high = 1
     idx_low = 2
-    """# for i in range(1,len(data)):
-    #     trend_high.append(SortedList(key=lambda x: x[0]))
-    #     initial_single_slope(data[:i+1], trend_high, idx_high)
-    #     current_slope = trend_high[i][0][0]
-    #     update_trend_high(i, i - 1, current_slope=current_slope)
-        
-    #     trend_low.append(SortedList(key=lambda x: x[0]))  
-    #     initial_single_slope(data[:i+1], trend_low, idx_low)
-    #     current_slope = trend_low[i][0][0]
-    #     update_trend_low(i, i - 1, current_slope=current_slope)
-        
-        # plt.cla()
-        # plt.plot(data[:,0],data[:,1],marker = '.',markersize = 20)
-        # for k in range(1, i+1):
-        #     for slope, j in trend_high[k]:
-        #         point = data[k, [0, idx_high]]
-        #         m = slope
-        #         plt.axline(point, slope=m, color='red', linewidth=0.1, label=f'Slope = {m}')
-
-        # plt.plot(data[:,0],data[:,2],marker = '.',markersize = 20)
-        # # # plt.show()
-        # for k in range(1, i+1):
-        #     for slope, j in trend_low[k]:
-        #         point = data[k, [0, idx_low]]
-        #         m = slope
-        #         plt.axline(point, slope=m, color='green', linewidth=0.1, label=f'Slope = {m}')
-        # plt.draw()
-        # plt.pause(1)
-        """
+    trend_high = [[SortedList(key=lambda x: x[0])]]
+    trend_low = [[SortedList(key=lambda x: x[0])]]
     
-    i = 1
-    fig, ax = plt.subplots()
-    extended_num = 1
-    if 1:
-        if i < len(data) - 1:
-            i += 1
-            if i > extended_num:
-                # trend_high[extended_num].append(SortedList(key=lambda x: x[0]))
-                # trend_low[extended_num].append(SortedList(key=lambda x: x[0]))
-                new_trend(data[:i], update_trend_high, update_trend_low, initial_single_slope, trend_high[extended_num],  idx_high, trend_low[extended_num], idx_low)
-                trend_high[i] = trend_high[extended_num]
-                trend_low[i] = trend_low[extended_num]
-            update_plot(trend_high=trend_high[i], trend_low=trend_low[i], i = i-1)
-    fig.canvas.mpl_connect('key_press_event', on_key)
+    start_time = time.perf_counter()
+    for i in range(1,len(data)):
+        trend_data = trend_high[i-1]
+        trend_data.append(SortedList(key=lambda x: x[0]))
+        trend_high.append(trend_data)
+        
+        trend_data = trend_low[i - 1]
+        trend_data.append(SortedList(key=lambda x: x[0]))
+        trend_low.append(trend_data)
+        
+        backtest_data = data[:i+1]
+        initial_single_slope(backtest_data, trend=trend_high[i], idx=idx_high)
+        initial_single_slope(backtest_data, trend=trend_low[i], idx=idx_low)
+        if (i >= 2):
+            calculate_trend(threshold=threshold, data=backtest_data, update_trend_high=update_trend_high, update_trend_low=update_trend_low, trend_high=trend_high[i], trend_low=trend_low[i],start_idx=i)
+    end_time = time.perf_counter()
+    elapsed_time = end_time - start_time
+    print(f"回测耗时: {elapsed_time:.6f} 秒")
+    print("calculating completed")
+    
+    #plot the trend data
+    
+    plt.figure()
+    for i in range(floor(len(data) * 0.8), len(data)):
+        plt.ion()
+        plt.clf()
+        backtest_data = data[:i+1]
+        price_visualize(backtest_data, type_data)
+        trend_visualize(threshold, backtest_data, type_data, trend_high[i], trend_low[i])
+        visual_number = total_length if total_length < 100 else 100 #单图内可视化数量
+        plt.xlim(backtest_data[-1][0] - visual_number * time_number(interval) * 1000, backtest_data[-1][0] +time_number(interval) * 1000)
+        plt.ylim(min(backtest_data[-visual_number:,2])* 0.9995, max(backtest_data [-visual_number:,1])* 1.0005)
+        plt.draw()
+        plt.pause(0.1)  # 暂停以便观察更新，时间可以根据需要调整
 
-
-
+    # Assume data is a NumPy array with columns: [time, high, low, close], etc.
     
         
-
-    
-
         
-
-
-plt.show()
+        
+    
+    plt.show()
 
 
 #%%
