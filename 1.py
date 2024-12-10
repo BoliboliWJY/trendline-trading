@@ -93,7 +93,7 @@ coin_type = "BTCUSDT"
 
 mode = 'backtest' #'realtime' or 'backtest'
 threshold = 0.0005
-total_length = 1000
+total_length = 50000
 interval = '3m'
 time_number(interval)
 current_time = int(time.time())
@@ -160,43 +160,6 @@ def initial_single_slope(data, trend, idx):
     prev_time, prev_value = data[j,[0,idx]]
     slope = (current_value - prev_value) / (current_time - prev_time)
     trend[i].add((slope,j))
-
-def update_plot(trend_high, trend_low, i):
-    ax.cla()
-    ax.plot(data[:i+1, 0], data[:i+1, 1], marker='.', markersize=3, color='blue')
-    ax.plot(data[:i+1, 0], data[:i+1, 2], marker='.', markersize=3, color='orange')
-    for k in range(1, i+1):
-        for slope, j in trend_high[k]:
-            point = data[k, [0, idx_high]]
-            m = slope
-            ax.axline(point, slope=m, color='red', linewidth=0.1)
-        for slope, j in trend_low[k]:
-            point = data[k, [0, idx_low]]
-            m = slope
-            ax.axline(point, slope=m, color='green', linewidth=0.1)
-            ax.set_title(f'Index i = {data[i,0]}')
-            plt.draw()
-         
-def on_key(event):
-    global i
-    extended_num = 1
-    if event.key == 'right':
-        print(i)
-        
-        if i < len(data) - 1:
-            i += 1
-            if i > extended_num:
-                new_trend(data[:i+1], update_trend_high, update_trend_low, initial_single_slope, trend_high[extended_num],  idx_high, trend_low[extended_num], idx_low)
-                trend_high[i] = trend_high[extended_num]
-                trend_low[i] = trend_low[extended_num]
-            update_plot(trend_high=trend_high[i], trend_low=trend_low[i], i = i-1)
-    elif event.key == 'left':
-        print(i)
-        if i > 0:
-            i -= 1
-            update_plot(trend_high=trend_high[i], trend_low=trend_low[i], i = i-1)
-    elif event.key == 'escape':
-        plt.close(fig)
 
 def remove_elements_above_threshold(trend_high, threshold):
     for current_idx in range(len(trend_high) - 1, -1, -1):
@@ -355,8 +318,12 @@ def calculate_trend(threshold, data, update_trend_high, update_trend_low, trend_
     plt.show()"""
 
 #%%
+import copy
+import cProfile
+import pstats
 mode = 'realtime'
 mode = 'backtest'
+
 if mode == 'realtime':
     # plt.ion()
     plt.figure()
@@ -392,53 +359,192 @@ if mode == 'realtime':
     plt.show()
        
 elif mode == 'backtest':
-    idx_high = 1
-    idx_low = 2
-    trend_high = [[SortedList(key=lambda x: x[0])]]
-    trend_low = [[SortedList(key=lambda x: x[0])]]
+    # profiler = cProfile.Profile()
+    # profiler.enable()
     
-    start_time = time.perf_counter()
-    for i in range(1,len(data)):
-        trend_data = trend_high[i-1]
-        trend_data.append(SortedList(key=lambda x: x[0]))
-        trend_high.append(trend_data)
-        
-        trend_data = trend_low[i - 1]
-        trend_data.append(SortedList(key=lambda x: x[0]))
-        trend_low.append(trend_data)
-        
-        backtest_data = data[:i+1]
-        initial_single_slope(backtest_data, trend=trend_high[i], idx=idx_high)
-        initial_single_slope(backtest_data, trend=trend_low[i], idx=idx_low)
-        if (i >= 2):
-            calculate_trend(threshold=threshold, data=backtest_data, update_trend_high=update_trend_high, update_trend_low=update_trend_low, trend_high=trend_high[i], trend_low=trend_low[i],start_idx=i)
-    end_time = time.perf_counter()
-    elapsed_time = end_time - start_time
-    print(f"回测耗时: {elapsed_time:.6f} 秒")
-    print("calculating completed")
+    def backtest_calculate_trend_generator(threshold, data, initial_single_slope, update_trend_high, update_trend_low, calculate_trend):
+        idx_high = 1
+        idx_low = 2
+        trend_high = [SortedList(key=lambda x: x[0])]
+        trend_low = [SortedList(key=lambda x: x[0])]
+        for i in range(1,len(data)):
+            #deepcopy, recording data each round, while it's much much slower
+            # new_trend_high = []
+            # for skl in trend_high[i-1]:
+            #     new_trend_high.append(copy.copy(skl))
+            # new_sorted_high = SortedList(key=lambda x: x[0])
+            # new_trend_high.append(new_sorted_high)
+            # new_trend_low = []
+            # for skl in trend_low[i-1]:
+            #     new_trend_low.append(copy.copy(skl))
+            # new_sorted_low = SortedList(key=lambda x: x[0])
+            # new_trend_low.append(new_sorted_low)
+            #shallow copy, covering data, faster while unable to loof forward
+            trend_high.append(SortedList(key=lambda x: x[0]))
+            trend_low.append(SortedList(key=lambda x: x[0]))
+            
+            backtest_data = data[:i+1]
+            
+            initial_single_slope(backtest_data, trend=trend_high, idx=idx_high)
+            initial_single_slope(backtest_data, trend=trend_low, idx=idx_low)
+            if (i >= 2):
+                calculate_trend(threshold=threshold, data=backtest_data,    update_trend_high=update_trend_high, update_trend_low=update_trend_low,    trend_high=trend_high, trend_low=trend_low,start_idx=i)
+            #for deepcopy:
+            # trend_high.append(new_trend_high)
+            # trend_low.append(new_trend_low)
+            #for shallow copy:
+            yield trend_high.copy(), trend_low.copy()
+            
+            
+
     
+    
+    
+    # start_time = time.perf_counter()
+    
+    # backtest_calculate_trend(threshold, data, initial_single_slope, update_trend_high, update_trend_low, calculate_trend)
+    
+    
+    # end_time = time.perf_counter()
+    # elapsed_time = end_time - start_time
+    # print(f"回测耗时: {elapsed_time:.6f} 秒")
+    # print("calculating completed")
+    
+    # profiler.disable()
+    # stats = pstats.Stats(profiler).sort_stats('cumtime')
+    # stats.print_stats(10)  # Print top 10 functions by cumulative time
     #plot the trend data
     
-    plt.figure()
-    for i in range(floor(len(data) * 0.8), len(data)):
-        plt.ion()
-        plt.clf()
-        backtest_data = data[:i+1]
-        price_visualize(backtest_data, type_data)
-        trend_visualize(threshold, backtest_data, type_data, trend_high[i], trend_low[i])
-        visual_number = total_length if total_length < 100 else 100 #单图内可视化数量
-        plt.xlim(backtest_data[-1][0] - visual_number * time_number(interval) * 1000, backtest_data[-1][0] +time_number(interval) * 1000)
-        plt.ylim(min(backtest_data[-visual_number:,2])* 0.9995, max(backtest_data [-visual_number:,1])* 1.0005)
-        plt.draw()
-        plt.pause(0.1)  # 暂停以便观察更新，时间可以根据需要调整
+    def prepare_price_lines(ax, data, type_data):
+        time = data[:, 0]
+        high_price = data[:, 1]
+        low_price = data[:, 2]
+        open_price = data[:, 3]
+        close_price = data[:, 4]
+        
+        segs_high_low = [((time[i], high_price[i]), (time[i], low_price[i])) for i in range(len(data))]
+        color_price = ['green' if t else 'red' for t in type_data]
+        line_high_low = LineCollection(segs_high_low, colors=color_price, linewidths=0.5)
+        ax.add_collection(line_high_low)
+        
+        segs_open_close = [((time[i], open_price[i]), (time[i], close_price[i])) for i in range(len(data))]
+        line_open_close = LineCollection(segs_open_close, color=color_price, linewidths=2)
+        ax.add_collection(line_open_close)
+        
+        return line_high_low, line_open_close
+        
 
-    # Assume data is a NumPy array with columns: [time, high, low, close], etc.
+                
+                
+        
+    def update_price_lines(line_high_low, line_open_close, data, type_data):
+        time = data[:, 0]
+        high_price = data[:, 1]
+        low_price = data[:, 2]
+        open_price = data[:, 3]
+        close_price = data[:, 4]
+        
+        segs_high_low = [((time[i], high_price[i]), (time[i], low_price[i])) for i in range(len(data))]
+        color_price = ['green' if t else 'red' for t in type_data]
+        line_high_low.set_segments(segs_high_low)
+        line_high_low.set_color(color_price)
+        
+        segs_open_close = [((time[i], open_price[i]), (time[i], close_price[i])) for i in range(len(data))]
+        line_open_close.set_segments(segs_open_close)
+        line_open_close.set_color(color_price)
+        
+    def update_trend_lines(line_trend_high, line_trend_low, threshold, data, trend_high, trend_low, type_data):
+        start_point_high = []
+        end_point_high = []
+        for i in range(1, len(data) - 1):
+            for slope, j in trend_high[i]:
+                # if abs(slope) > threshold or type_data[j] == 0:
+                if abs(slope) > threshold:
+                    continue
+                # delta_start = data[j, 0] - data[0, 0]
+                x = data[j, 0]
+                y = data[j, 1]
+                start_point_high.append([x, y])
+                delta_end = data[-1, 0] - data[i, 0]
+                x = data[-1, 0]
+                y = data[i, 1] + delta_end * slope
+                end_point_high.append([x, y])
+        segments_high = list(zip(start_point_high, end_point_high))
+        line_trend_high.set_segments(segments_high)
+            
+        start_point_low = []
+        end_point_low = []
+        for i in range(1, len(data) - 1):
+            for slope, j in trend_low[i]:
+                # if abs(slope) > threshold or type_data[j] == 1:
+                if abs(slope) > threshold:
+                    continue
+                # delta_start = data[j, 0] - data[0, 0]
+                x = data[j, 0]
+                y = data[j, 2]
+                start_point_low.append([x, y])
+                delta_end = data[-1, 0] - data[i, 0]
+                x = data[-1, 0]
+                y = data[i, 2] + delta_end * slope
+                end_point_low.append([x, y])
+        segments_low = list(zip(start_point_low, end_point_low))
+        line_trend_low.set_segments(segments_low)
+                
+                
+                    
+                    
+        
+    def animate_backtest(threshold, data, type_data, initial_single_slope, update_trend_high, update_trend_low, calculate_trend, visual_number = 100):
+        fig, ax = plt.subplots()
+        line_high_low, line_open_close = prepare_price_lines(ax, data[:1], type_data[:1])
+        # ax.set_xlim(data[0, 0], data[0, 0] +  60000 * visual_number)
+        # ax.set_ylim(min(data[:, 2]) * 0.9995, max(data[:, 1]) * 1.0005)
+        line_trend_high = LineCollection([], colors='green', linewidths=0.5)
+        line_trend_low = LineCollection([], colors='red', linewidths=0.5)
+        ax.add_collection(line_trend_high)
+        ax.add_collection(line_trend_low)
+        
+        # Initialize axis limits
+        ax.set_xlim(data[0, 0] - 1000 * visual_number, data[0, 0] + 1000 * visual_number)
+        ax.set_ylim(min(data[:, 2]) * 0.9995, max(data[:, 1]) * 1.0005)
+
+        # Initialize the generator
+        trend_generator = backtest_calculate_trend_generator(
+            threshold, data, initial_single_slope, update_trend_high, update_trend_low,     calculate_trend
+        )
     
+        def update(frame):
+            try:
+                trend_high, trend_low = next(trend_generator)
+            except StopIteration:
+                return line_high_low, line_open_close, line_trend_high, line_trend_low
+            current_data = data[:frame+1]
+            current_type = type_data[:frame+1]
+            update_price_lines(line_high_low, line_open_close, current_data, current_type)
+            update_trend_lines(line_trend_high, line_trend_low, threshold, current_data, trend_high, trend_low, type_data)
+            if frame > visual_number:
+                ax.set_xlim(current_data[frame - visual_number, 0], current_data[frame, 0])
+                ax.set_ylim(min(current_data[frame - visual_number : frame, 2]) * 0.9995, max(current_data[frame - visual_number : frame, 1]) * 1.0005)
+            else:
+                ax.set_xlim(current_data[0, 0] - 1000 * visual_number, current_data[-1, 0] +  1000 * visual_number)
+                ax.set_ylim(min(current_data[:, 2]) * 0.9995, max(current_data[:, 1]) * 1.0005)
+                
+            return line_high_low, line_open_close, line_trend_high, line_trend_low
+        
+        ani = animation.FuncAnimation(fig, update, frames = len(data), interval = 100, blit=True)
+        plt.show()
+        
+    import matplotlib.animation as animation
+    from matplotlib.collections import LineCollection
+
+    animate_backtest(
+        threshold, data, type_data,
+        initial_single_slope, update_trend_high, update_trend_low,
+        calculate_trend,
+        visual_number=500
+    )
         
         
-        
-    
-    plt.show()
 
 
 #%%
