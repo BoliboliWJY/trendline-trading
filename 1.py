@@ -93,7 +93,7 @@ coin_type = "BTCUSDT"
 
 mode = 'backtest' #'realtime' or 'backtest'
 threshold = 0.0005
-total_length = 500
+total_length = 50
 interval = '3m'
 time_number(interval)
 current_time = int(time.time())
@@ -437,23 +437,23 @@ elif mode == 'backtest':
                 
                 
         
-    def update_price_lines(line_high_low, line_open_close, data, type_data, visual_number):
+    def update_price_lines(line_high_low, line_open_close, data, type_data):
         time = data[:, 0]
         high_price = data[:, 1]
         low_price = data[:, 2]
         open_price = data[:, 3]
         close_price = data[:, 4]
         
-        segs_high_low = [((time[i], high_price[i]), (time[i], low_price[i])) for i in range(len(data) - visual_number, len(data))]
+        segs_high_low = [((time[i], high_price[i]), (time[i], low_price[i])) for i in range(len(data))]
         color_price = ['green' if t else 'red' for t in type_data]
         line_high_low.set_segments(segs_high_low)
         line_high_low.set_color(color_price)
         
-        segs_open_close = [((time[i], open_price[i]), (time[i], close_price[i])) for i in range(len(data) - visual_number, len(data))]
+        segs_open_close = [((time[i], open_price[i]), (time[i], close_price[i])) for i in range(len(data))]
         line_open_close.set_segments(segs_open_close)
         line_open_close.set_color(color_price)
         
-    def update_trend_lines(line_trend_high, line_trend_low, threshold, data, trend_high, trend_low, type_data, visual_number):
+    def update_trend_lines(line_trend_high, line_trend_low, threshold, data, trend_high, trend_low, type_data):
         start_point_high = []
         end_point_high = []
         for i in range(1, len(trend_high)):
@@ -461,13 +461,13 @@ elif mode == 'backtest':
                 # if abs(slope) > threshold or type_data[j] == 0:
                 if abs(slope) > threshold:
                     continue
-                delta_start = data[-1 - visual_number, 0] - data[j, 0]
-                x = data[-1 - visual_number, 0]
-                y = data[-1 - visual_number, 1] + delta_start * slope
+                # delta_start = data[j, 0] - data[0, 0]
+                x = data[j, 0]
+                y = data[j, 1]
                 start_point_high.append([x, y])
                 delta_end = data[-1, 0] - data[i, 0]
                 x = data[-1, 0]
-                y = data[-1, 1] + delta_end * slope
+                y = data[i, 1] + delta_end * slope
                 end_point_high.append([x, y])
         segments_high = list(zip(start_point_high, end_point_high))
         line_trend_high.set_segments(segments_high)
@@ -518,13 +518,12 @@ elif mode == 'backtest':
                 trend_high, trend_low = next(trend_generator)
             except StopIteration:
                 return line_high_low, line_open_close, line_trend_high, line_trend_low
-            actual_frame = frame + 5
-            avail_number = frame if frame < visual_number else visual_number
+            actual_frame = frame + 3
             current_data = data[:actual_frame]
             current_type = type_data[:actual_frame]
-            update_price_lines(line_high_low, line_open_close, current_data, current_type, avail_number)
+            update_price_lines(line_high_low, line_open_close, current_data, current_type)
             # current_data = data[:frame + 50]
-            update_trend_lines(line_trend_high, line_trend_low, threshold, data, trend_high, trend_low, type_data, avail_number)
+            update_trend_lines(line_trend_high, line_trend_low, threshold, data, trend_high, trend_low, type_data)
             if frame > visual_number:
                 lower_x = current_data[frame - visual_number, 0]
                 upper_x = current_data[frame, 0] + 6 * (current_data[frame, 0] - current_data[frame - 1, 0])
@@ -539,13 +538,13 @@ elif mode == 'backtest':
             
             return line_high_low, line_open_close, line_trend_high, line_trend_low
         
-        ani = animation.FuncAnimation(fig, update, frames = len(data), interval = 100, blit=True)
+        ani = animation.FuncAnimation(fig, update, frames = len(data), interval = 500, blit=False)
         plt.show()
     #%%
     import matplotlib.animation as animation
     from matplotlib.collections import LineCollection
     threshold = 100
-    animate_backtest(threshold, data, type_data, initial_single_slope, update_trend_high, update_trend_low, calculate_trend, visual_number=100)
+    animate_backtest(threshold, data, type_data, initial_single_slope, update_trend_high, update_trend_low, calculate_trend, visual_number=10)
         
         
 
