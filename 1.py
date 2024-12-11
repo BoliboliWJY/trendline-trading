@@ -3,7 +3,6 @@ from binance.spot import Spot as Client
 import time
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
-import time
 #%%
 from math import ceil,floor
 import numpy as np
@@ -80,9 +79,7 @@ def get_data_in_batches(client,coin_type,interval,total_length,current_time,limi
     # if(interval == '1s'):
     # data = data_compression(data)
     # data = data[:,[0,1]]
-    return data, type_data
-
-
+    return data, type_data.reshape(-1)
 #%%
 #获取历史数据
 
@@ -93,7 +90,7 @@ coin_type = "BTCUSDT"
 
 mode = 'backtest' #'realtime' or 'backtest'
 threshold = 0.0005
-total_length = 50
+total_length = 10000
 interval = '3m'
 time_number(interval)
 current_time = int(time.time())
@@ -362,24 +359,31 @@ elif mode == 'backtest':
     # profiler = cProfile.Profile()
     # profiler.enable()
     
+    
+    def filter_trend(trend_high, trend_low, data):
+        threshold = 999
+        filtered_trend_high = [[] for _ in range(len(trend_high))]
+        for i in range(1, len(trend_high)):
+            for slope, j in trend_high[i]:
+                if np.abs(slope) <= threshold:
+                    filtered_trend_high[i].append([slope, j])
+        filtered_trend_high = np.array(filtered_trend_high, dtype=object)
+        
+        filtered_trend_low = [[] for _ in range(len(trend_low))]
+        for i in range(1, len(trend_low)):
+            for slope, j in trend_low[i]:
+                if np.abs(slope) <= threshold:
+                    filtered_trend_low[i].append([slope, j])
+        filtered_trend_low = np.array(filtered_trend_low, dtype=object)
+        return filtered_trend_high, filtered_trend_low
+
+    
     def backtest_calculate_trend_generator(threshold, data, initial_single_slope, update_trend_high, update_trend_low, calculate_trend):
         idx_high = 1
         idx_low = 2
         trend_high = [SortedList(key=lambda x: x[0])]
         trend_low = [SortedList(key=lambda x: x[0])]
         for i in range(1,len(data)):
-            #deepcopy, recording data each round, while it's much much slower
-            # new_trend_high = []
-            # for skl in trend_high[i-1]:
-            #     new_trend_high.append(copy.copy(skl))
-            # new_sorted_high = SortedList(key=lambda x: x[0])
-            # new_trend_high.append(new_sorted_high)
-            # new_trend_low = []
-            # for skl in trend_low[i-1]:
-            #     new_trend_low.append(copy.copy(skl))
-            # new_sorted_low = SortedList(key=lambda x: x[0])
-            # new_trend_low.append(new_sorted_low)
-            #shallow copy, covering data, faster while unable to loof forward
             trend_high.append(SortedList(key=lambda x: x[0]))
             trend_low.append(SortedList(key=lambda x: x[0]))
             
@@ -393,158 +397,469 @@ elif mode == 'backtest':
             # trend_high.append(new_trend_high)
             # trend_low.append(new_trend_low)
             #for shallow copy:
-            yield trend_high.copy(), trend_low.copy()
+            filtered_trend_high = trend_high.copy()
+            filtered_trend_low = trend_low.copy()
+            filtered_trend_high, filtered_trend_low = filter_trend(filtered_trend_high, filtered_trend_low, data)
+                
+            yield filtered_trend_high, filtered_trend_low
+            
+    import sys
+    import pyqtgraph as pg
+    from pyqtgraph.Qt import QtCore, QtWidgets
+    import numpy as np
+    from collections import OrderedDict
+    
+    class PlotWindow(QtWidgets.QWidget):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+
+            self.plotter = None  # Will be set by Plotter
+            self.setWindowTitle("Data Plotter with FPS")
+            self.resize(1200, 800)
+            self.setStyleSheet("""
+                QWidget {
+                    background-color: black;
+                }
+                QPushButton {
+                    background-color: #333333;
+                    color: white;
+                    border: 2px solid #555555;
+                    border-radius: 5px;
+                    padding: 5px 10px;
+                    font-size: 14px;
+                }
+                QPushButton:hover {
+                    background-color: #555555;
+                }
+                QPushButton:pressed {
+                    background-color: #777777;
+                }
+            """)
+            # Create a vertical layout
+            layout = QtWidgets.QVBoxLayout()
+            self.setLayout(layout)
+
+            # Create the pyqtgraph PlotWidget
+            self.plot_widget = pg.PlotWidget()
+            layout.addWidget(self.plot_widget)
+            
+            #hoirzontal layout for buttons
+            button_layout = QtWidgets.QHBoxLayout()
+            layout.addLayout(button_layout)
             
             
-
-    
-    
-    
-    # start_time = time.perf_counter()
-    
-    # backtest_calculate_trend(threshold, data, initial_single_slope, update_trend_high, update_trend_low, calculate_trend)
-    
-    
-    # end_time = time.perf_counter()
-    # elapsed_time = end_time - start_time
-    # print(f"回测耗时: {elapsed_time:.6f} 秒")
-    # print("calculating completed")
-    
-    # profiler.disable()
-    # stats = pstats.Stats(profiler).sort_stats('cumtime')
-    # stats.print_stats(10)  # Print top 10 functions by cumulative time
-    #plot the trend data
-    
-    def prepare_price_lines(ax, data, type_data):
-        time = data[:, 0]
-        high_price = data[:, 1]
-        low_price = data[:, 2]
-        open_price = data[:, 3]
-        close_price = data[:, 4]
-        
-        segs_high_low = [((time[i], high_price[i]), (time[i], low_price[i])) for i in range(len(data))]
-        color_price = ['green' if t else 'red' for t in type_data]
-        line_high_low = LineCollection(segs_high_low, colors=color_price, linewidths=0.5)
-        ax.add_collection(line_high_low)
-        
-        segs_open_close = [((time[i], open_price[i]), (time[i], close_price[i])) for i in range(len(data))]
-        line_open_close = LineCollection(segs_open_close, color=color_price, linewidths=2)
-        ax.add_collection(line_open_close)
-        
-        return line_high_low, line_open_close
-        
-
-                
-                
-        
-    def update_price_lines(line_high_low, line_open_close, data, type_data):
-        time = data[:, 0]
-        high_price = data[:, 1]
-        low_price = data[:, 2]
-        open_price = data[:, 3]
-        close_price = data[:, 4]
-        
-        segs_high_low = [((time[i], high_price[i]), (time[i], low_price[i])) for i in range(len(data))]
-        color_price = ['green' if t else 'red' for t in type_data]
-        line_high_low.set_segments(segs_high_low)
-        line_high_low.set_color(color_price)
-        
-        segs_open_close = [((time[i], open_price[i]), (time[i], close_price[i])) for i in range(len(data))]
-        line_open_close.set_segments(segs_open_close)
-        line_open_close.set_color(color_price)
-        
-    def update_trend_lines(line_trend_high, line_trend_low, threshold, data, trend_high, trend_low, type_data):
-        start_point_high = []
-        end_point_high = []
-        for i in range(1, len(trend_high)):
-            for slope, j in trend_high[i]:
-                # if abs(slope) > threshold or type_data[j] == 0:
-                if abs(slope) > threshold:
-                    continue
-                # delta_start = data[j, 0] - data[0, 0]
-                x = data[j, 0]
-                y = data[j, 1]
-                start_point_high.append([x, y])
-                delta_end = data[-1, 0] - data[i, 0]
-                x = data[-1, 0]
-                y = data[i, 1] + delta_end * slope
-                end_point_high.append([x, y])
-        segments_high = list(zip(start_point_high, end_point_high))
-        line_trend_high.set_segments(segments_high)
+            self.prev_button = QtWidgets.QPushButton("Previous")
+            button_layout.addWidget(self.prev_button)
+            self.prev_button.clicked.connect(self.on_prev_button)
             
-        start_point_low = []
-        end_point_low = []
-        for i in range(1, len(trend_high)):
-            for slope, j in trend_low[i]:
-                # if abs(slope) > threshold or type_data[j] == 1:
-                if abs(slope) > threshold:
-                    continue
-                # delta_start = data[j, 0] - data[0, 0]
-                x = data[j, 0]
-                y = data[j, 2]
-                start_point_low.append([x, y])
-                delta_end = data[-1, 0] - data[i, 0]
-                x = data[-1, 0]
-                y = data[i, 2] + delta_end * slope
-                end_point_low.append([x, y])
-        segments_low = list(zip(start_point_low, end_point_low))
-        line_trend_low.set_segments(segments_low)
-                
-                
-                    
-                    
-        
-    def animate_backtest(threshold, data, type_data, initial_single_slope, update_trend_high, update_trend_low, calculate_trend, visual_number = 100):
-        fig, ax = plt.subplots()
-        line_high_low, line_open_close = prepare_price_lines(ax, data[:1], type_data[:1])
-        # ax.set_xlim(data[0, 0], data[0, 0] +  60000 * visual_number)
-        # ax.set_ylim(min(data[:, 2]) * 0.9995, max(data[:, 1]) * 1.0005)
-        line_trend_high = LineCollection([], colors='green', linewidths=0.1)
-        line_trend_low = LineCollection([], colors='red', linewidths=0.1)
-        ax.add_collection(line_trend_high)
-        ax.add_collection(line_trend_low)
-        
-        # Initialize axis limits
-        ax.set_xlim(data[0, 0] - 1000 * visual_number, data[0, 0] + 1000 * visual_number)
-        ax.set_ylim(min(data[:, 2]) * 0.9995, max(data[:, 1]) * 1.0005)
+            self.next_button = QtWidgets.QPushButton("Next")
+            button_layout.addWidget(self.next_button)
+            self.next_button.clicked.connect(self.on_next_button)
 
-        # Initialize the generator
-        trend_generator = backtest_calculate_trend_generator(
-            threshold, data, initial_single_slope, update_trend_high, update_trend_low,     calculate_trend
-        )
-    
-        def update(frame):
-            try:
-                trend_high, trend_low = next(trend_generator)
-            except StopIteration:
-                return line_high_low, line_open_close, line_trend_high, line_trend_low
-            actual_frame = frame + 3
-            current_data = data[:actual_frame]
-            current_type = type_data[:actual_frame]
-            update_price_lines(line_high_low, line_open_close, current_data, current_type)
-            # current_data = data[:frame + 50]
-            update_trend_lines(line_trend_high, line_trend_low, threshold, data, trend_high, trend_low, type_data)
-            if frame > visual_number:
-                lower_x = current_data[frame - visual_number, 0]
-                upper_x = current_data[frame, 0] + 6 * (current_data[frame, 0] - current_data[frame - 1, 0])
-                ax.set_ylim(min(current_data[frame - visual_number : actual_frame, 2]) * 0.9995, max(current_data[frame - visual_number : actual_frame, 1]) * 1.0005)
+            # Add a Pause/Resume button
+            self.pause_button = QtWidgets.QPushButton("Pause")
+            layout.addWidget(self.pause_button)
+            # Connect the button to the toggle_pause method
+            self.pause_button.clicked.connect(self.on_pause_button)
+
+        def on_prev_button(self):
+            if self.plotter:
+                self.plotter.show_previous_frame()             
+        def on_next_button(self):
+            if self.plotter:
+                self.plotter.show_next_frame()         
+        def on_pause_button(self):
+            if self.plotter:
+                self.plotter.toggle_pause()
+        def keyPressEvent(self, event):
+            if event.key() == QtCore.Qt.Key_Space:
+                if self.plotter:
+                    self.plotter.toggle_pause()
+            elif event.key() == QtCore.Qt.Key_Left:
+                if self.plotter:
+                    self.plotter.show_previous_frame()
+            elif event.key() == QtCore.Qt.Key_Right:
+                if self.plotter:
+                    self.plotter.show_next_frame()
             else:
-                lower_x = current_data[0, 0]
-                upper_x = current_data[-1, 0] + 6 * (current_data[-1, 0] - current_data[-1 - 1, 0])
-                ax.set_ylim(min(current_data[:, 2]) * 0.9995, max(current_data[:, 1]) * 1.0005)
-            ax.set_xlim(lower_x, upper_x)
+                super().keyPressEvent(event)
+    
+    class Plotter:
+        def __init__(self, data, type_data, trend_generator,base_trend_number = 100, visual_number = 100, update_interval = 200, cache_size = 100):
+            self.data = data
+            self.type_data = type_data
+            self.trend_generator = trend_generator
+            self.base_trend_number = base_trend_number
+            self.visual_number = visual_number
+            self.update_interval = update_interval
+            self.frame_count = 0
+            self.is_paused = True  # State to track pause/resume
+            self.plot_cache = OrderedDict()
+            self.cache_size = cache_size
             
             
+            #FPS
+            self.frame_count_fps = 0
+            self.last_time_fps = time.time()
+            self.fps = 0
+            #application and window
+            self.app = QtWidgets.QApplication(sys.argv)
+            self.win = PlotWindow()
+            self.win.plotter = self  # Reference for key events
             
-            return line_high_low, line_open_close, line_trend_high, line_trend_low
+            self.plot = self.win.plot_widget.plotItem
+            self.set_plot_ranges(self.data[:self.visual_number])
+            self.plot.getViewBox().setBackgroundColor('k')
+            
+            self.plot_lines = {}
+            self.initialize_plot_lines()
+            
+            self.current_data = self.data[:self.visual_number]
+            self.current_type = self.type_data[:self.visual_number]
+            self.update_plot_initial()
+            
+            #timer
+            self.timer = QtCore.QTimer()
+            self.timer.timeout.connect(self.update_plot)
+            self.timer.start(self.update_interval)
+            
+            #fps
+            self.fps_timer = QtCore.QTimer()
+            self.fps_timer.timeout.connect(self.update_fps)
+            self.fps_timer.start(1000)
+
+            self.win.closeEvent = self.on_close
+            
+        def initialize_plot_lines(self, ):
+            """
+            Initializes all plot lines based on the plot configurations.
+            """
+            linewidth = 300 / self.visual_number
+            self.plot_configs = [
+                {
+                    'name':'high_low_green',
+                    'color':'green',
+                    'width':linewidth,
+                    'columns':[0,2,0,1],  # [x, y_high, x, y_high]
+                    'connect':'pairs',
+                    'condition':lambda type_val:type_val == 0
+                },
+                {
+                    'name': 'high_low_red',
+                    'color': 'red',
+                    'width': linewidth,
+                    'columns': [0,2,0,1],  # [x, y_high, x, y_high]
+                    'connect': 'pairs',
+                    'condition': lambda type_val:type_val == 1
+                },
+                {
+                     'name': 'open_close_green',
+                     'color': 'green',
+                     'width': 2 * linewidth,
+                     'columns': [0, 3, 0, 4],  # [x, y_low, x, y_low]
+                     'connect': 'pairs',
+                     'condition': lambda type_val: type_val == 0
+                },
+                {
+                    'name': 'open_close_red',
+                    'color': 'red',
+                    'width': 2 * linewidth,
+                    'columns': [0, 3, 0, 4],  # [x, y_low, x, y_low]
+                    'connect': 'pairs',
+                    'condition': lambda type_val: type_val == 1
+                }
+            ]
+            
+            for config in self.plot_configs:
+                pen = pg.mkPen(color=config['color'], width=config['width'])
+                self.plot_lines[config['name']] = self.plot.plot([], [], pen=pen, connect=config['connect'])
+                
+            # Initialize Trend Lines
+            trend_pen_high = pg.mkPen(color='green', width=0.5, style=QtCore.Qt.SolidLine)
+            trend_pen_low = pg.mkPen(color='red', width=0.5, style=QtCore.Qt.SolidLine)
+            self.plot_lines['trend_high'] = self.plot.plot([], [], pen=trend_pen_high, name='Trend High')
+            self.plot_lines['trend_low'] = self.plot.plot([], [], pen=trend_pen_low, name='Trend Low')
+                
+        def set_plot_ranges(self, data_slice):
+            """
+            Sets the X and Y ranges of the plot based on the provided data slice.
+            """
+            x_interval = data_slice[1, 0] - data_slice[0, 0]
+            x_min = data_slice[0, 0]
+            x_max = data_slice[-1, 0]
+            y_min = np.min(data_slice[:, 1:3])  # Considering y_high and y_low
+            y_max = np.max(data_slice[:, 1:3])
+            self.plot.setXRange(x_min, x_max + self.visual_number * 0.05 * x_interval)
+            self.plot.setYRange(y_min, y_max)
+            
+        def update_plot_line(self, plot_name, x_data, y_data):
+            """
+            Updates a specific plot line with new X and Y data.
+            """
+            self.plot_lines[plot_name].setData(x_data, y_data)
+            
+        def extract_cache_data(self):
+            """
+            Extracts and returns the current data and processed pairs for caching.
+            Returns a dictionary keyed by plot line names.
+            """
+            cache_data = {'current_data': self.current_data,
+                          'current_type': self.current_type,}
+            for config in self.plot_configs:
+                if config['name'] in ['trend_high', 'trend_low']:
+                    continue
+                condition = config['condition']
+                indices = condition(self.current_type)
+                filtered_data = self.current_data[indices]
+                pairs = filtered_data[:, config['columns']].reshape(-1,4)
+                cache_data[config['name']] = pairs
+            return cache_data
         
-        ani = animation.FuncAnimation(fig, update, frames = len(data), interval = 500, blit=False)
-        plt.show()
-    #%%
-    import matplotlib.animation as animation
-    from matplotlib.collections import LineCollection
-    threshold = 100
-    animate_backtest(threshold, data, type_data, initial_single_slope, update_trend_high, update_trend_low, calculate_trend, visual_number=10)
+        def trend_to_line(self, data, trend_high, trend_low):
+            x_high, y_high, x_low, y_low = [], [], [], []
+
+            for i in range(1, len(trend_high)):
+                delta = data[max(i, len(trend_high)),0] - data[max(0, i - len(trend_high)),0]
+                for slope, j in trend_high[i]:
+                    if 0 <= j < len(data) and 0 <= i < len(data):
+                        x_high.extend([data[j, 0] - delta, data[i, 0] + delta, np.nan])
+                        y_high.extend([data[j, 1] - delta * slope, data[i, 1] + delta * slope, np.nan])
+                    
+            for i in range(1, len(trend_low)):
+                delta = data[max(i, len(trend_low)),0] - data[max(0, i - len(trend_low)),0]
+                for slope, j in trend_low[i]:
+                    if 0 <= j < len(data) and 0 <= i < len(data):
+                        x_low.extend([data[j, 0] - delta, data[i, 0] + delta, np.nan])
+                        y_low.extend([data[j, 2] - delta * slope, data[i, 2] + delta * slope, np.nan])
+            return np.array(x_high), np.array(y_high), np.array(x_low), np.array(y_low)
+                    
+        
+        def update_plot_initial(self):
+            """
+            Initializes the plot with the first set of data and caches it.
+            """
+            try:
+                for _ in range(len(self.current_data) - 1):
+                    trend_high, trend_low = next(self.trend_generator)
+            except StopIteration:
+                trend_high, trend_low = [], []
+            x_high, y_high, x_low, y_low = self.trend_to_line(self.data, trend_high, trend_low)
+            self.update_plot_line('trend_high', x_high.flatten(), y_high.flatten())
+            self.update_plot_line('trend_low', x_low.flatten(), y_low.flatten())
+                
+            for config in self.plot_configs:
+                condition = config['condition']
+                indices = condition(self.current_type)
+                filtered_data = self.current_data[indices]
+                
+                pairs = filtered_data[:, config['columns']].reshape(-1,4)
+                x_data = pairs[:, [0, 2]].flatten()
+                y_data = pairs[:, [1, 3]].flatten()
+                self.update_plot_line(config['name'], x_data, y_data)
+            
+            cache_data = self.extract_cache_data()
+            cache_data['trend_high'] = [x_high, y_high]
+            cache_data['trend_low'] = [x_low, y_low]
+            self.plot_cache[0] = cache_data
+            
+            
+        
+        def update_plot(self):
+            if self.is_paused:
+                return
+            
+            self.frame_count += 1
+            self.frame_count_fps += 1
+            # print(f"Frame: {self.frame_count}") 
+            end_index = self.frame_count + self.visual_number
+            if end_index > len(self.data):
+                print("Reached end of data. Stopping the plot.")
+                self.timer.stop()
+                self.fps_timer.stop()
+                return
+            
+            cache_key = self.frame_count
+            if cache_key in self.plot_cache:
+                cached_data = self.plot_cache[cache_key]
+                self.current_data = cached_data['current_data']
+                self.current_type = cached_data['current_type']
+            else:
+                self.current_data = self.data[self.frame_count:self.visual_number + self.frame_count]
+                self.current_type = self.type_data[self.frame_count: end_index]
+                
+                try:
+                    trend_high, trend_low = next(self.trend_generator)
+                except StopIteration:
+                    trend_high, trend_low = [], []
+                x_high, y_high, x_low, y_low = self.trend_to_line(self.data, trend_high, trend_low)
+                regular_cache = self.extract_cache_data()
+                regular_cache['trend_high'] = [x_high, y_high]
+                regular_cache['trend_low'] = [x_low, y_low]
+                self.plot_cache[cache_key] = regular_cache
+                cached_data = regular_cache
+            self.update_trend_lines(cached_data)
+                
+            if len(self.plot_cache) > self.cache_size:
+                removed_key, _ = self.plot_cache.popitem(last=False)
+                    
+            for config in self.plot_configs:
+                plot_name = config['name']
+                if plot_name in ['trend_high', 'trend_low']:
+                    continue
+                pairs = cached_data.get(plot_name, [])
+                if isinstance(pairs, np.ndarray) and pairs.size > 0:
+                    x_data = pairs[:, [0, 2]].flatten()
+                    y_data = pairs[:, [1, 3]].flatten()
+                    self.update_plot_line(plot_name, x_data, y_data)
+                else:
+                    self.update_plot_line(plot_name, [], [])
+                    
+            self.set_plot_ranges(self.current_data)
+        
+        def update_trend_lines(self, cached_data):
+            """
+            Updates the trend_high and trend_low plot lines.
+            """
+            x_high, y_high = cached_data.get('trend_high', ([], []))
+            x_low, y_low = cached_data.get('trend_low', ([], []))
+
+            if len(x_high) > 0 and len(y_high) > 0:
+                self.update_plot_line('trend_high', x_high.flatten(), y_high.flatten())
+            else:
+                self.update_plot_line('trend_high', [], [])
+
+            if len(x_low) > 0 and len(y_low) > 0:
+                self.update_plot_line('trend_low', x_low.flatten(), y_low.flatten())
+            else:
+                self.update_plot_line('trend_low', [], [])
+            
+        def on_close(self, event):
+            self.timer.stop()
+            self.fps_timer.stop()
+            self.app.quit()
+            event.accept()
+            
+        def update_fps(self):
+            current_time = time.time()
+            elapsed = current_time - self.last_time_fps
+            if elapsed > 0:
+                self.fps = self.frame_count_fps / elapsed
+            else:
+                self.fps = 0
+            self.win.setWindowTitle(f"FPS: {self.fps:.2f}")
+            self.frame_count_fps = 0
+            self.last_time_fps = current_time
+        
+        def load_frame_from_cache(self, frame_key):
+            if frame_key in self.plot_cache:
+                cached_data = self.plot_cache[frame_key]
+            else:
+                if frame_key + self.visual_number <= len(self.data):
+                    self.current_data = self.data[frame_key:frame_key + self.visual_number]
+                    self.current_type = self.type_data[frame_key:frame_key + self.visual_number]
+                    try:
+                        trend_high, trend_low = next(self.trend_generator)
+                    except StopIteration:
+                        trend_high, trend_low = [], []
+                    x_high, y_high, x_low, y_low = self.trend_to_line(self.data, trend_high, trend_low)
+                    regular_cache = self.extract_cache_data()
+                    regular_cache['trend_high'] = [x_high, y_high]
+                    regular_cache['trend_low'] = [x_low, y_low]
+                    
+                    self.plot_cache[frame_key] = regular_cache
+                    cached_data = regular_cache
+                    
+                    if len(self.plot_cache) > self.cache_size:
+                        removed_key, _ = self.plot_cache.popitem(last=False)
+                        print(f"Removed frame {removed_key} from cache.")
+                        
+                else:
+                    return
+            self.current_data = cached_data['current_data']
+            self.current_type = cached_data['current_type']
+            
+            self.update_trend_lines(cached_data)
+                
+            for config in self.plot_configs:
+                plot_name = config['name']
+                pairs = cached_data.get(plot_name, [])
+                if isinstance(pairs, np.ndarray) and pairs.size > 0:
+                    x_data = pairs[:, [0, 2]].flatten()
+                    y_data = pairs[:, [1, 3]].flatten()
+                    self.update_plot_line(plot_name, x_data, y_data)
+                else:
+                    self.update_plot_line(plot_name, [], [])
+            # self.set_plot_ranges(self.current_data) #手动查看时不修改xy范围
+                
+        def get_min_cached_frame(self):
+            if self.plot_cache:
+                return min(self.plot_cache.keys())
+            return 0                
+        
+        def show_previous_frame(self):
+            if self.frame_count > self.get_min_cached_frame():
+                self.frame_count -= 1
+                self.load_frame_from_cache(self.frame_count)
+            else:
+                print("Reached the oldest cached frame. Cannot go back further.")
+                
+                
+        def show_next_frame(self):
+            end_index = self.frame_count + self.visual_number + 1
+            if end_index <= len(self.data):
+                self.frame_count += 1
+                self.load_frame_from_cache(self.frame_count)
+            else:
+                print("Reached end of data. Stopping the plot.")
+                self.timer.stop()
+                self.fps_timer.stop()
+                
+        def pause_plotting(self):
+            if not self.is_paused:
+                self.timer.stop()
+                self.fps_timer.stop()
+                self.win.pause_button.setText("Resume")
+                self.is_paused = True
+                print("Plotting Paused.")
+        
+        def resume_plotting(self):
+            """
+            Resumes the automatic plot updates.
+            """
+            if self.is_paused:
+                self.timer.start(self.update_interval)
+                self.fps_timer.start(1000)
+                self.win.pause_button.setText("Pause")
+                self.is_paused = False
+                print("Plotting Resumed.")
+        
+        def toggle_pause(self):
+            if self.is_paused:
+                #resume the timer
+                self.resume_plotting()
+            else:
+                #pause the timer
+                self.pause_plotting()
+                
+        def run(self):
+            self.win.show()
+            sys.exit(self.app.exec_())
+
+    trend_generator = backtest_calculate_trend_generator(threshold=threshold, data=data, initial_single_slope=initial_single_slope, update_trend_high=update_trend_high, update_trend_low=update_trend_low, calculate_trend=calculate_trend)
+    Plotter_backtest = Plotter(data, type_data, trend_generator, visual_number=200, update_interval=10, cache_size = 500)
+    Plotter_backtest.run()
+    
+    
+    
+        
+    
+            
+            
+
+    
+    
+    
+
         
         
 
