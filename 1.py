@@ -82,7 +82,7 @@ def get_data_in_batches(client,coin_type,interval,total_length,current_time,limi
     return data, type_data.reshape(-1)
 #%%
 #获取历史数据
-
+start_time = time.perf_counter()
 key = 'uiY3WGKVNEaCkntmyikLCALO9O63PBAYcVDwLw0Xu66AgcrEBXab0UANMbWZOsj4'
 secret = 'O7zn1HEFTr0e9msT1m52Nu6utZtIkmicRsbUtpSJSdVJrTlLs2NIVLLhiwALXKez'
 client = Client(key, secret)
@@ -96,11 +96,25 @@ time_number(interval)
 current_time = int(time.time())
 limit = total_length if total_length < 1000 else 1000
 # limit = 10
-start_time = time.perf_counter()
-[data, type_data] = get_data_in_batches(client,coin_type,interval,total_length,current_time,limit)
+
+
+filename = f"{coin_type}_{interval}_{total_length}.npy"
+typename = f"{coin_type}_{interval}_{total_length}_type.npy"
+
+import os
+if os.path.exists(filename) and os.path.exists(typename):
+    # Load the data if the files exist
+    data = np.load(filename)
+    type_data = np.load(typename)
+else:
+    
+    [data, type_data] = get_data_in_batches(client,coin_type,interval,total_length,current_time,limit)
+    np.save(filename, data)
+    np.save(typename, type_data)
 end_time = time.perf_counter()
 elapsed_time = end_time - start_time
 print(f"获取数据耗时: {elapsed_time:.6f} 秒")
+
 # plt.figure()
 # plt.plot(data[:,0])
 # plt.show()
@@ -318,9 +332,27 @@ def calculate_trend(threshold, data, update_trend_high, update_trend_low, trend_
 import copy
 import cProfile
 import pstats
+import io
 mode = 'realtime'
 mode = 'backtest'
+def profile_method(func):
+            def wrapper(*args, **kwargs):
+                profiler = cProfile.Profile()
+                profiler.enable()
 
+                result = func(*args, **kwargs)
+
+                profiler.disable()
+                s = io.StringIO()
+                sortby = 'tottime'
+                ps = pstats.Stats(profiler, stream=s).sort_stats(sortby)
+                ps.print_stats(10)
+                print(s.getvalue())
+
+                return result
+            return wrapper
+# profiler = cProfile.Profile()#分析运行时间
+# profiler.enable()
 if mode == 'realtime':
     # plt.ion()
     plt.figure()
@@ -356,28 +388,52 @@ if mode == 'realtime':
     plt.show()
        
 elif mode == 'backtest':
-    # profiler = cProfile.Profile()
-    # profiler.enable()
     
     
-    def filter_trend(trend_high, trend_low, data):
-        threshold = 999
-        filtered_trend_high = [[] for _ in range(len(trend_high))]
-        for i in range(1, len(trend_high)):
-            for slope, j in trend_high[i]:
-                if np.abs(slope) <= threshold:
-                    filtered_trend_high[i].append([slope, j])
-        filtered_trend_high = np.array(filtered_trend_high, dtype=object)
+    
+    def filter_trend(trend_high, trend_low, data, threshold=0.00003):
+        # filtered_trend_high = [[] for _ in range(len(trend_high))]
+        # for i in range(1, len(trend_high)):
+        #     for slope, j in trend_high[i]:
+        #         if np.abs(slope) <= threshold:
+        #             filtered_trend_high[i].append([slope, j])
+        # filtered_trend_high = np.array(filtered_trend_high, dtype=object)
         
-        filtered_trend_low = [[] for _ in range(len(trend_low))]
-        for i in range(1, len(trend_low)):
-            for slope, j in trend_low[i]:
-                if np.abs(slope) <= threshold:
-                    filtered_trend_low[i].append([slope, j])
+        # filtered_trend_low = [[] for _ in range(len(trend_low))]
+        # for i in range(1, len(trend_low)):
+        #     for slope, j in trend_low[i]:
+        #         if np.abs(slope) <= threshold:
+        #             filtered_trend_low[i].append([slope, j])
+        # filtered_trend_low = np.array(filtered_trend_low, dtype=object)
+        def _filter_single_trend(trend):
+            """
+            Filters a single trend based on the slope threshold.
+            
+            Parameters:
+            - trend: List[Tuple[float, int]] - A list of (slope, j) tuples.
+            
+            Returns:
+            - filtered_trend: List[List[Tuple[float, int]]] - Filtered trend.
+            """
+            # Using list comprehension for faster filtering
+            return [
+                [(slope, j) for slope, j in sub_trend if abs(slope) <= threshold]
+                for sub_trend in trend
+            ]
+        
+        # Filter trend_high and trend_low
+        filtered_trend_high = _filter_single_trend(trend_high)
+        filtered_trend_low = _filter_single_trend(trend_low)
+        
+        # Convert to NumPy arrays with dtype=object
+        filtered_trend_high = np.array(filtered_trend_high, dtype=object)
         filtered_trend_low = np.array(filtered_trend_low, dtype=object)
+        
+        #暂时先不过滤
+        # filtered_trend_high = trend_high
+        # filtered_trend_low = trend_low
         return filtered_trend_high, filtered_trend_low
 
-    
     def backtest_calculate_trend_generator(threshold, data, initial_single_slope, update_trend_high, update_trend_low, calculate_trend):
         idx_high = 1
         idx_low = 2
@@ -396,19 +452,19 @@ elif mode == 'backtest':
             #for deepcopy:
             # trend_high.append(new_trend_high)
             # trend_low.append(new_trend_low)
-            #for shallow copy:
-            filtered_trend_high = trend_high.copy()
-            filtered_trend_low = trend_low.copy()
-            filtered_trend_high, filtered_trend_low = filter_trend(filtered_trend_high, filtered_trend_low, data)
+            # #for shallow copy:
+            # filtered_trend_high = trend_high.copy()
+            # filtered_trend_low = trend_low.copy()
+            # filtered_trend_high, filtered_trend_low = filter_trend(filtered_trend_high, filtered_trend_low, data)
                 
-            yield filtered_trend_high, filtered_trend_low
+            yield trend_high, trend_low
             
     import sys
     import pyqtgraph as pg
     from pyqtgraph.Qt import QtCore, QtWidgets
     import numpy as np
     from collections import OrderedDict
-    
+        
     class PlotWindow(QtWidgets.QWidget):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
@@ -484,11 +540,13 @@ elif mode == 'backtest':
             else:
                 super().keyPressEvent(event)
     
+    # @profile_method
     class Plotter:
-        def __init__(self, data, type_data, trend_generator,base_trend_number = 100, visual_number = 100, update_interval = 200, cache_size = 100):
+        def __init__(self, data, type_data, trend_generator, filter_trend, base_trend_number = 1000, visual_number = 100, update_interval = 200, cache_size = 100):
             self.data = data
             self.type_data = type_data
             self.trend_generator = trend_generator
+            self.filter_trend = filter_trend
             self.base_trend_number = base_trend_number
             self.visual_number = visual_number
             self.update_interval = update_interval
@@ -496,7 +554,6 @@ elif mode == 'backtest':
             self.is_paused = True  # State to track pause/resume
             self.plot_cache = OrderedDict()
             self.cache_size = cache_size
-            
             
             #FPS
             self.frame_count_fps = 0
@@ -508,14 +565,14 @@ elif mode == 'backtest':
             self.win.plotter = self  # Reference for key events
             
             self.plot = self.win.plot_widget.plotItem
-            self.set_plot_ranges(self.data[:self.visual_number])
+            self.set_plot_ranges(self.data[self.base_trend_number: self.base_trend_number + self.visual_number])
             self.plot.getViewBox().setBackgroundColor('k')
             
             self.plot_lines = {}
             self.initialize_plot_lines()
             
-            self.current_data = self.data[:self.visual_number]
-            self.current_type = self.type_data[:self.visual_number]
+            self.current_data = self.data[: self.base_trend_number + self.visual_number]
+            self.current_type = self.type_data[: self.base_trend_number + self.visual_number]
             self.update_plot_initial()
             
             #timer
@@ -529,7 +586,7 @@ elif mode == 'backtest':
             self.fps_timer.start(1000)
 
             self.win.closeEvent = self.on_close
-            
+         
         def initialize_plot_lines(self, ):
             """
             Initializes all plot lines based on the plot configurations.
@@ -591,7 +648,8 @@ elif mode == 'backtest':
             y_max = np.max(data_slice[:, 1:3])
             self.plot.setXRange(x_min, x_max + self.visual_number * 0.05 * x_interval)
             self.plot.setYRange(y_min, y_max)
-            
+        
+        
         def update_plot_line(self, plot_name, x_data, y_data):
             """
             Updates a specific plot line with new X and Y data.
@@ -616,22 +674,94 @@ elif mode == 'backtest':
             return cache_data
         
         def trend_to_line(self, data, trend_high, trend_low):
-            x_high, y_high, x_low, y_low = [], [], [], []
+            # x_high, y_high, x_low, y_low = [], [], [], []
 
-            for i in range(1, len(trend_high)):
-                delta = data[max(i, len(trend_high)),0] - data[max(0, i - len(trend_high)),0]
-                for slope, j in trend_high[i]:
-                    if 0 <= j < len(data) and 0 <= i < len(data):
-                        x_high.extend([data[j, 0] - delta, data[i, 0] + delta, np.nan])
-                        y_high.extend([data[j, 1] - delta * slope, data[i, 1] + delta * slope, np.nan])
+            # for i in range(1, len(trend_high)):
+            #     delta = data[max(i, len(trend_high)),0] - data[max(0, i - len(trend_high)),0]
+            #     for slope, j in trend_high[i]:
+            #         if 0 <= j < len(data) and 0 <= i < len(data):
+            #             x_high.extend([data[j, 0] - delta, data[i, 0] + delta, np.nan])
+            #             y_high.extend([data[j, 1] - delta * slope, data[i, 1] + delta * slope, np.nan])
                     
-            for i in range(1, len(trend_low)):
-                delta = data[max(i, len(trend_low)),0] - data[max(0, i - len(trend_low)),0]
+            # for i in range(1, len(trend_low)):
+            #     delta = data[max(i, len(trend_low)),0] - data[max(0, i - len(trend_low)),0]
+            #     for slope, j in trend_low[i]:
+            #         if 0 <= j < len(data) and 0 <= i < len(data):
+            #             x_low.extend([data[j, 0] - delta, data[i, 0] + delta, np.nan])
+            #             y_low.extend([data[j, 2] - delta * slope, data[i, 2] + delta * slope, np.nan])
+            # return np.array(x_high), np.array(y_high), np.array(x_low), np.array(y_low)
+            # Precompute delta_high and delta_low
+            N_high = len(trend_high)
+            if N_high > 0 and N_high < len(data):
+                delta_high = data[N_high, 0] - data[0, 0]
+            else:
+                delta_high = 0  # Handle edge cases appropriately
+
+            N_low = len(trend_low)
+            if N_low > 0 and N_low < len(data):
+                delta_low = data[N_low, 0] - data[0, 0]
+            else:
+                delta_low = 0  # Handle edge cases appropriately
+
+            # Process trend_high
+            slopes_high = []
+            js_high = []
+            is_high = []
+
+            for i in range(1, N_high):
+                for slope, j in trend_high[i]:
+                    if 0 <= j < len(data):
+                        slopes_high.append(slope)
+                        js_high.append(j)
+                        is_high.append(i)
+
+            slopes_high = np.array(slopes_high)
+            js_high = np.array(js_high)
+            is_high = np.array(is_high)
+
+            # Compute x_high and y_high using vectorized operations
+            num_high = len(slopes_high)
+            x_high = np.empty(num_high * 3)
+            y_high = np.empty(num_high * 3)
+
+            x_high[0::3] = data[js_high, 0] - delta_high
+            x_high[1::3] = data[is_high, 0] + delta_high
+            x_high[2::3] = np.nan  # Separator
+
+            y_high[0::3] = data[js_high, 1] - delta_high * slopes_high
+            y_high[1::3] = data[is_high, 1] + delta_high * slopes_high
+            y_high[2::3] = np.nan  # Separator
+
+            # Process trend_low
+            slopes_low = []
+            js_low = []
+            is_low = []
+
+            for i in range(1, N_low):
                 for slope, j in trend_low[i]:
-                    if 0 <= j < len(data) and 0 <= i < len(data):
-                        x_low.extend([data[j, 0] - delta, data[i, 0] + delta, np.nan])
-                        y_low.extend([data[j, 2] - delta * slope, data[i, 2] + delta * slope, np.nan])
-            return np.array(x_high), np.array(y_high), np.array(x_low), np.array(y_low)
+                    if 0 <= j < len(data):
+                        slopes_low.append(slope)
+                        js_low.append(j)
+                        is_low.append(i)
+
+            slopes_low = np.array(slopes_low)
+            js_low = np.array(js_low)
+            is_low = np.array(is_low)
+
+            # Compute x_low and y_low using vectorized operations
+            num_low = len(slopes_low)
+            x_low = np.empty(num_low * 3)
+            y_low = np.empty(num_low * 3)
+
+            x_low[0::3] = data[js_low, 0] - delta_low
+            x_low[1::3] = data[is_low, 0] + delta_low
+            x_low[2::3] = np.nan  # Separator
+
+            y_low[0::3] = data[js_low, 2] - delta_low * slopes_low
+            y_low[1::3] = data[is_low, 2] + delta_low * slopes_low
+            y_low[2::3] = np.nan  # Separator
+
+            return x_high, y_high, x_low, y_low
                     
         
         def update_plot_initial(self):
@@ -643,6 +773,9 @@ elif mode == 'backtest':
                     trend_high, trend_low = next(self.trend_generator)
             except StopIteration:
                 trend_high, trend_low = [], []
+                
+            trend_high, trend_low =self.filter_trend(trend_high, trend_low, data)#filter the trend in need    
+                
             x_high, y_high, x_low, y_low = self.trend_to_line(self.data, trend_high, trend_low)
             self.update_plot_line('trend_high', x_high.flatten(), y_high.flatten())
             self.update_plot_line('trend_low', x_low.flatten(), y_low.flatten())
@@ -662,11 +795,32 @@ elif mode == 'backtest':
             cache_data['trend_low'] = [x_low, y_low]
             self.plot_cache[0] = cache_data
             
+        def organize_data(self):
+            """a merged update line data for manual and auto operation
+            """
+            self.current_data = self.data[self.base_trend_number + self.frame_count: self.base_trend_number + self.visual_number + self.frame_count]
+            self.current_type = self.type_data[self.base_trend_number + self.frame_count: self.base_trend_number + self.visual_number + self.frame_count]
+            try:
+                trend_high, trend_low = next(self.trend_generator)
+            except StopIteration:
+                trend_high, trend_low = [], []
+                
+            trend_high, trend_low =self.filter_trend(trend_high, trend_low, data)#filter the trend in need  
             
+            x_high, y_high, x_low, y_low = self.trend_to_line(self.data, trend_high, trend_low)
+            regular_cache = self.extract_cache_data()
+            regular_cache['trend_high'] = [x_high, y_high]
+            regular_cache['trend_low'] = [x_low, y_low]
+            self.plot_cache[self.frame_count] = regular_cache
+            return regular_cache
         
+        # @profile_method
         def update_plot(self):
+            """update the later trend data
+            """
             if self.is_paused:
                 return
+
             
             self.frame_count += 1
             self.frame_count_fps += 1
@@ -678,41 +832,29 @@ elif mode == 'backtest':
                 self.fps_timer.stop()
                 return
             
-            cache_key = self.frame_count
-            if cache_key in self.plot_cache:
-                cached_data = self.plot_cache[cache_key]
+            if self.frame_count in self.plot_cache:
+                cached_data = self.plot_cache[self.frame_count]
                 self.current_data = cached_data['current_data']
                 self.current_type = cached_data['current_type']
             else:
-                self.current_data = self.data[self.frame_count:self.visual_number + self.frame_count]
-                self.current_type = self.type_data[self.frame_count: end_index]
-                
-                try:
-                    trend_high, trend_low = next(self.trend_generator)
-                except StopIteration:
-                    trend_high, trend_low = [], []
-                x_high, y_high, x_low, y_low = self.trend_to_line(self.data, trend_high, trend_low)
-                regular_cache = self.extract_cache_data()
-                regular_cache['trend_high'] = [x_high, y_high]
-                regular_cache['trend_low'] = [x_low, y_low]
-                self.plot_cache[cache_key] = regular_cache
-                cached_data = regular_cache
+                cached_data = self.organize_data()
             self.update_trend_lines(cached_data)
                 
             if len(self.plot_cache) > self.cache_size:
                 removed_key, _ = self.plot_cache.popitem(last=False)
-                    
-            for config in self.plot_configs:
-                plot_name = config['name']
-                if plot_name in ['trend_high', 'trend_low']:
-                    continue
-                pairs = cached_data.get(plot_name, [])
-                if isinstance(pairs, np.ndarray) and pairs.size > 0:
-                    x_data = pairs[:, [0, 2]].flatten()
-                    y_data = pairs[:, [1, 3]].flatten()
-                    self.update_plot_line(plot_name, x_data, y_data)
-                else:
-                    self.update_plot_line(plot_name, [], [])
+                 
+            with pg.BusyCursor():
+                for config in self.plot_configs:
+                    plot_name = config['name']
+                    if plot_name in ['trend_high', 'trend_low']:
+                        continue
+                    pairs = cached_data.get(plot_name, [])
+                    if isinstance(pairs, np.ndarray) and pairs.size > 0:
+                        x_data = pairs[:, [0, 2]].flatten()
+                        y_data = pairs[:, [1, 3]].flatten()
+                        self.update_plot_line(plot_name, x_data, y_data)
+                    else:
+                        self.update_plot_line(plot_name, [], [])
                     
             self.set_plot_ranges(self.current_data)
         
@@ -750,34 +892,19 @@ elif mode == 'backtest':
             self.frame_count_fps = 0
             self.last_time_fps = current_time
         
-        def load_frame_from_cache(self, frame_key):
-            if frame_key in self.plot_cache:
-                cached_data = self.plot_cache[frame_key]
+        def load_frame_from_cache(self):
+            if self.frame_count in self.plot_cache:
+                cached_data = self.plot_cache[self.frame_count]
             else:
-                if frame_key + self.visual_number <= len(self.data):
-                    self.current_data = self.data[frame_key:frame_key + self.visual_number]
-                    self.current_type = self.type_data[frame_key:frame_key + self.visual_number]
-                    try:
-                        trend_high, trend_low = next(self.trend_generator)
-                    except StopIteration:
-                        trend_high, trend_low = [], []
-                    x_high, y_high, x_low, y_low = self.trend_to_line(self.data, trend_high, trend_low)
-                    regular_cache = self.extract_cache_data()
-                    regular_cache['trend_high'] = [x_high, y_high]
-                    regular_cache['trend_low'] = [x_low, y_low]
+                if self.frame_count + self.base_trend_number + self.visual_number <= len(self.data):
+                    cached_data = self.organize_data()
                     
-                    self.plot_cache[frame_key] = regular_cache
-                    cached_data = regular_cache
-                    
-                    if len(self.plot_cache) > self.cache_size:
-                        removed_key, _ = self.plot_cache.popitem(last=False)
-                        print(f"Removed frame {removed_key} from cache.")
+                if len(self.plot_cache) > self.cache_size:
+                    removed_key, _ = self.plot_cache.popitem(last=False)
+                    print(f"Removed frame {removed_key} from cache.")
                         
-                else:
-                    return
             self.current_data = cached_data['current_data']
             self.current_type = cached_data['current_type']
-            
             self.update_trend_lines(cached_data)
                 
             for config in self.plot_configs:
@@ -794,12 +921,12 @@ elif mode == 'backtest':
         def get_min_cached_frame(self):
             if self.plot_cache:
                 return min(self.plot_cache.keys())
-            return 0                
+            return 0
         
         def show_previous_frame(self):
             if self.frame_count > self.get_min_cached_frame():
                 self.frame_count -= 1
-                self.load_frame_from_cache(self.frame_count)
+                self.load_frame_from_cache()
             else:
                 print("Reached the oldest cached frame. Cannot go back further.")
                 
@@ -808,7 +935,7 @@ elif mode == 'backtest':
             end_index = self.frame_count + self.visual_number + 1
             if end_index <= len(self.data):
                 self.frame_count += 1
-                self.load_frame_from_cache(self.frame_count)
+                self.load_frame_from_cache()
             else:
                 print("Reached end of data. Stopping the plot.")
                 self.timer.stop()
@@ -843,15 +970,18 @@ elif mode == 'backtest':
                 
         def run(self):
             self.win.show()
+            
             sys.exit(self.app.exec_())
+            
+        
 
     trend_generator = backtest_calculate_trend_generator(threshold=threshold, data=data, initial_single_slope=initial_single_slope, update_trend_high=update_trend_high, update_trend_low=update_trend_low, calculate_trend=calculate_trend)
-    Plotter_backtest = Plotter(data, type_data, trend_generator, visual_number=200, update_interval=10, cache_size = 500)
+    Plotter_backtest = Plotter(data, type_data, trend_generator, filter_trend ,base_trend_number = int(total_length * 0.8), visual_number=200, update_interval=30, cache_size = 500)
     Plotter_backtest.run()
+
     
     
-    
-        
+      
     
             
             
