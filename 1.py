@@ -6,6 +6,7 @@ from matplotlib.animation import FuncAnimation
 #%%
 from math import ceil,floor
 import numpy as np
+import os
 
 def time_number(interval):
     """ 将时间间隔单位转换为秒数 """
@@ -89,19 +90,20 @@ client = Client(key, secret)
 coin_type = "BTCUSDT"
 
 mode = 'backtest' #'realtime' or 'backtest'
-threshold = 0.0005
-total_length = 100
+threshold = 1
+total_length = 10000
 interval = '3m'
 time_number(interval)
 current_time = int(time.time())
 limit = total_length if total_length < 1000 else 1000
 # limit = 10
 
+directory = os.path.join(os.getcwd(), coin_type)
+filename = os.path.join(directory, f"{coin_type}_{interval}_{total_length}.npy")
+typename = os.path.join(directory, f"{coin_type}_{interval}_{total_length}_type.npy")
 
-filename = f"{coin_type}_{interval}_{total_length}.npy"
-typename = f"{coin_type}_{interval}_{total_length}_type.npy"
+os.makedirs(directory, exist_ok=True)
 
-import os
 if os.path.exists(filename) and os.path.exists(typename):
     # Load the data if the files exist
     data = np.load(filename)
@@ -172,13 +174,7 @@ def initial_single_slope(data, trend, idx):
     slope = (current_value - prev_value) / (current_time - prev_time)
     trend[i].add((slope,j))
 
-def remove_elements_above_threshold(trend_high, threshold):
-    for current_idx in range(len(trend_high) - 1, -1, -1):
-        current_list = trend_high[current_idx]
-        if any(abs(slope) >= threshold for slope, _ in current_list):
-            del trend_high[current_idx]
-
-def update_trend_high(data, trend_high, current_idx, i, current_slope, threshold):
+def update_trend_high(data, trend_high, current_idx, i, current_slope):
     index = trend_high[i].bisect_left((current_slope,))
     for j in range(index - 1, -1, -1):
         current_time, current_value = data[current_idx, [0, 1]]
@@ -186,11 +182,10 @@ def update_trend_high(data, trend_high, current_idx, i, current_slope, threshold
         prev_time, prev_value = data[prev_index, [0, 1]]
         slope = (current_value - prev_value) / (current_time - prev_time)
         del trend_high[i][j]
-        # remove_elements_above_threshold(trend_high, threshold)
         trend_high[current_idx].add((slope, prev_index))
-        update_trend_high(data, trend_high, current_idx, prev_index, slope, threshold)
+        update_trend_high(data, trend_high, current_idx, prev_index, slope)
 
-def update_trend_low(data, trend_low, current_idx, i, current_slope, threshold):
+def update_trend_low(data, trend_low, current_idx, i, current_slope):
     index = trend_low[i].bisect_right((current_slope,))
     if len(trend_low[i]) == 0:
         return
@@ -200,10 +195,8 @@ def update_trend_low(data, trend_low, current_idx, i, current_slope, threshold):
         prev_time, prev_value = data[prev_index, [0, 2]]
         slope = (current_value - prev_value) / (current_time - prev_time)
         del trend_low[i][j]
-        # if abs(current_slope) >= threshold:
-        #     del trend_low[current_idx][0]
         trend_low[current_idx].add((slope, prev_index))
-        update_trend_low(data, trend_low, current_idx, prev_index, slope, threshold)
+        update_trend_low(data, trend_low, current_idx, prev_index, slope)
 
 def new_trend(data, update_trend_high, update_trend_low, initial_single_slope, trend_high, idx_high, trend_low, idx_low):
     for i in range(1,len(data)):
@@ -287,11 +280,10 @@ def trend_visualize(threshold, data, type_data, trend_high, trend_low):
 # loop_times = []#计算耗时
 #%%
 # mean = sum(data[:, 1] - data[:, 2]) / len(data)
-def calculate_trend(threshold, data, update_trend_high, update_trend_low, trend_high, trend_low, start_idx):
+def calculate_trend(data, update_trend_high, update_trend_low, trend_high, trend_low, start_idx):
     """calculate rise/fall trend, it shall calculate the length of the data
 
     Args:
-        threshold (double): maxinum number of slope
         data (array): market data
         update_trend_high (func): updating rise trend
         update_trend_low (func): updating fall trend
@@ -303,10 +295,10 @@ def calculate_trend(threshold, data, update_trend_high, update_trend_low, trend_
         # start_time = time.perf_counter()
     #process high_time
         current_slope = trend_high[i][0][0]
-        update_trend_high(data, trend_high=trend_high, current_idx=i, i=i - 1, current_slope=current_slope, threshold=threshold)
+        update_trend_high(data, trend_high=trend_high, current_idx=i, i=i - 1, current_slope=current_slope)
     #process low_time
         current_slope = trend_low[i][0][0]
-        update_trend_low(data, trend_low=trend_low, current_idx=i, i=i - 1, current_slope=current_slope, threshold=threshold)
+        update_trend_low(data, trend_low=trend_low, current_idx=i, i=i - 1, current_slope=current_slope)
     
     # end_time = time.perf_counter()  # 记录结束时间
     # elapsed_time = end_time - start_time  # 计算耗时
@@ -333,6 +325,7 @@ import copy
 import cProfile
 import pstats
 import io
+
 mode = 'realtime'
 mode = 'backtest'
 def profile_method(func):
@@ -371,7 +364,7 @@ if mode == 'realtime':
     initial_slope(data, trend_low,idx_low)
     
     start_time = time.perf_counter()
-    calculate_trend(threshold, data, update_trend_high, update_trend_low, trend_high, trend_low, 2)
+    calculate_trend(data, update_trend_high, update_trend_low, trend_high, trend_low, 2)
     end_time = time.perf_counter()
     elapsed_time = end_time - start_time
     print(f"实测耗时: {elapsed_time:.6f} 秒")
@@ -391,28 +384,28 @@ elif mode == 'backtest':
     
     
     
-    def filter_trend(trend_high, trend_low, data, threshold=1):
-        # filtered_trend_high = [[] for _ in range(len(trend_high))]
-        # for i in range(1, len(trend_high)):
-        #     for slope, j in trend_high[i]:
-        #         if np.abs(slope) <= threshold:
-        #             filtered_trend_high[i].append([slope, j])
-        # filtered_trend_high = np.array(filtered_trend_high, dtype=object)
+    def filter_trend(trend_high, trend_low, threshold=1):
+        filtered_trend_high = [[] for _ in range(len(trend_high))]
+        for i in range(1, len(trend_high)):
+            for slope, j in trend_high[i]:
+                if np.abs(slope) <= threshold:
+                    filtered_trend_high[i].append([slope, j])
+        filtered_trend_high = np.array(filtered_trend_high, dtype=object)
         
-        # filtered_trend_low = [[] for _ in range(len(trend_low))]
-        # for i in range(1, len(trend_low)):
-        #     for slope, j in trend_low[i]:
-        #         if np.abs(slope) <= threshold:
-        #             filtered_trend_low[i].append([slope, j])
-        # filtered_trend_low = np.array(filtered_trend_low, dtype=object)
+        filtered_trend_low = [[] for _ in range(len(trend_low))]
+        for i in range(1, len(trend_low)):
+            for slope, j in trend_low[i]:
+                if np.abs(slope) <= threshold:
+                    filtered_trend_low[i].append([slope, j])
+        filtered_trend_low = np.array(filtered_trend_low, dtype=object)
         
         
         #暂时先不过滤
         # filtered_trend_high = trend_high
         # filtered_trend_low = trend_low
-        return trend_high, trend_low
+        return filtered_trend_high, filtered_trend_low
 
-    def backtest_calculate_trend_generator(threshold, data, initial_single_slope, update_trend_high, update_trend_low, calculate_trend):
+    def backtest_calculate_trend_generator(data, initial_single_slope, update_trend_high, update_trend_low, calculate_trend):
         idx_high = 1
         idx_low = 2
         trend_high = [SortedList(key=lambda x: x[0])]
@@ -426,7 +419,7 @@ elif mode == 'backtest':
             initial_single_slope(backtest_data, trend=trend_high, idx=idx_high)
             initial_single_slope(backtest_data, trend=trend_low, idx=idx_low)
             if (i >= 2):
-                calculate_trend(threshold=threshold, data=backtest_data,    update_trend_high=update_trend_high, update_trend_low=update_trend_low,    trend_high=trend_high, trend_low=trend_low,start_idx=i)
+                calculate_trend(data=backtest_data, update_trend_high=update_trend_high, update_trend_low=update_trend_low, trend_high=trend_high, trend_low=trend_low,start_idx=i)
             #for deepcopy:
             # trend_high.append(new_trend_high)
             # trend_low.append(new_trend_low)
@@ -439,9 +432,19 @@ elif mode == 'backtest':
             
     import sys
     import pyqtgraph as pg
-    from pyqtgraph.Qt import QtCore, QtWidgets
+    from pyqtgraph.Qt import QtCore, QtWidgets, QtGui
+    import datetime
     import numpy as np
     from collections import OrderedDict
+        
+    class TimeAxisItem(pg.AxisItem):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+        def tickStrings(self, values, scale, spacing):
+            return [
+                datetime.datetime.fromtimestamp(value / 1000).strftime("%Y-%m-%d %H:%M:%S")
+                for value in values
+            ]
         
     class PlotWindow(QtWidgets.QWidget):
         def __init__(self, *args, **kwargs):
@@ -473,8 +476,10 @@ elif mode == 'backtest':
             layout = QtWidgets.QVBoxLayout()
             self.setLayout(layout)
 
+            time_axis = TimeAxisItem(orientation='bottom')
+            
             # Create the pyqtgraph PlotWidget
-            self.plot_widget = pg.PlotWidget()
+            self.plot_widget = pg.PlotWidget(axisItems={'bottom': time_axis})
             layout.addWidget(self.plot_widget)
             
             #hoirzontal layout for buttons
@@ -807,7 +812,7 @@ elif mode == 'backtest':
             except StopIteration:
                 trend_high, trend_low = [], []
                 
-            trend_high, trend_low =self.filter_trend(trend_high, trend_low, data)#filter the trend in need    
+            trend_high, trend_low =self.filter_trend(trend_high, trend_low)#filter the trend in need    
                 
             x_high, y_high, x_low, y_low = self.trend_to_line(trend_high, trend_low)
             self.update_plot_line('trend_high', x_high.flatten(), y_high.flatten())
@@ -843,7 +848,7 @@ elif mode == 'backtest':
             except StopIteration:
                 trend_high, trend_low = [], []
                 
-            trend_high, trend_low =self.filter_trend(trend_high, trend_low, data)#filter the trend in need  
+            trend_high, trend_low =self.filter_trend(trend_high, trend_low)#filter the trend in need  
             
             x_high, y_high, x_low, y_low = self.trend_to_line(trend_high, trend_low)
             regular_cache = self.extract_cache_data()
@@ -1038,10 +1043,20 @@ elif mode == 'backtest':
             
             sys.exit(self.app.exec_())
             
-        
-
-    trend_generator = backtest_calculate_trend_generator(threshold=threshold, data=data, initial_single_slope=initial_single_slope, update_trend_high=update_trend_high, update_trend_low=update_trend_low, calculate_trend=calculate_trend)
-    Plotter_backtest = Plotter(data, type_data, trend_generator, filter_trend ,base_trend_number = int(total_length * 0.8)-3, visual_number=20, update_interval=30, cache_size = 50)
+    aim_time = '2024-12-31 03:00:00'
+    aim_time = datetime.datetime.strptime(aim_time, '%Y-%m-%d %H:%M:%S').timestamp() * 1000
+    index = np.searchsorted(data[:,0], aim_time, side='right')
+    if index < len(data):
+        print(f"First index with data[:,0] > aim_time is {index}, with timestamp {data[index, 0]}")
+    else:
+        print("No data point found with data[:,0] > aim_time")
+    
+    visual_number = 200
+    base_trend_number = index - visual_number
+    base_trend_number = 1000
+    
+    trend_generator = backtest_calculate_trend_generator(data=data, initial_single_slope=initial_single_slope, update_trend_high=update_trend_high, update_trend_low=update_trend_low, calculate_trend=calculate_trend)
+    Plotter_backtest = Plotter(data, type_data, trend_generator, filter_trend ,base_trend_number = base_trend_number, visual_number=visual_number, update_interval=30, cache_size = visual_number*2)
     Plotter_backtest.run()
 
     
