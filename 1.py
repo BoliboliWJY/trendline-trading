@@ -90,7 +90,7 @@ coin_type = "BTCUSDT"
 
 mode = 'backtest' #'realtime' or 'backtest'
 threshold = 0.0005
-total_length = 10000
+total_length = 100
 interval = '3m'
 time_number(interval)
 current_time = int(time.time())
@@ -617,7 +617,7 @@ elif mode == 'backtest':
             
             horizontal_pen_high = pg.mkPen(color='yellow', width=0.5, style=QtCore.Qt.SolidLine)
             self.plot_lines['horizontal_high'] = self.plot.plot([], [], pen=horizontal_pen_high, name='Horizontal High')
-            horizontal_pen_low = pg.mkPen(color='blue', width=0.5, style=QtCore.Qt.SolidLine)
+            horizontal_pen_low = pg.mkPen(color='white', width=0.5, style=QtCore.Qt.SolidLine)
             self.plot_lines['horizontal_low'] = self.plot.plot([], [], pen=horizontal_pen_low, name='Horizontal Low')
                 
         def set_plot_ranges(self, data_slice):
@@ -659,6 +659,7 @@ elif mode == 'backtest':
         def trend_to_line(self, trend_high, trend_low):
             N_high = len(trend_high)
             N_low = len(trend_low)
+            data = self.data
             delta = (data[1,0] - data[0,0]) * 5
             # Process trend_high
             slopes_high = []
@@ -672,22 +673,26 @@ elif mode == 'backtest':
                         js_high.append(j)
                         is_high.append(i)
 
-            slopes_high = np.array(slopes_high)
-            js_high = np.array(js_high)
-            is_high = np.array(is_high)
+            if len(js_high) > 0:
+                slopes_high = np.array(slopes_high)
+                js_high = np.array(js_high)
+                is_high = np.array(is_high)
 
 
-            num_high = len(slopes_high)
-            x_high = np.empty(num_high * 3)
-            y_high = np.empty(num_high * 3)
+                num_high = len(slopes_high)
+                x_high = np.empty(num_high * 3)
+                y_high = np.empty(num_high * 3)
 
-            x_high[0::3] = data[js_high, 0]#start
-            x_high[1::3] = data[min(N_high, len(data)-1), 0] + delta #end
-            x_high[2::3] = np.nan  # Separator
+                x_high[0::3] = data[js_high, 0]#start
+                x_high[1::3] = data[min(N_high, len(data)-1), 0] + delta #end
+                x_high[2::3] = np.nan  # Separator
 
-            y_high[0::3] = data[js_high, 1]#start
-            y_high[1::3] = data[js_high, 1] + (data[min(N_high, len(data)-1), 0] - data[js_high, 0] + delta) * slopes_high#end
-            y_high[2::3] = np.nan  # Separator
+                y_high[0::3] = data[js_high, 1]#start
+                y_high[1::3] = data[js_high, 1] + (data[min(N_high, len(data)-1), 0] - data[js_high,    0] + delta) * slopes_high#end
+                y_high[2::3] = np.nan  # Separator
+            else:
+                x_high = []
+                y_high = []
 
             # Process trend_low
             slopes_low = []
@@ -701,21 +706,25 @@ elif mode == 'backtest':
                         js_low.append(j)
                         is_low.append(i)
             
-            slopes_low = np.array(slopes_low)
-            js_low = np.array(js_low)
-            is_low = np.array(is_low)
+            if len(js_low) > 0:
+                slopes_low = np.array(slopes_low)
+                js_low = np.array(js_low)
+                is_low = np.array(is_low)
 
-            num_low = len(slopes_low)
-            x_low = np.empty(num_low * 3)
-            y_low = np.empty(num_low * 3)
+                num_low = len(slopes_low)
+                x_low = np.empty(num_low * 3)
+                y_low = np.empty(num_low * 3)
 
-            x_low[0::3] = data[js_low, 0]
-            x_low[1::3] = data[min(N_low, len(data)-1), 0] + delta
-            x_low[2::3] = np.nan  # Separator
-            
-            y_low[0::3] = data[js_low, 2]
-            y_low[1::3] = data[js_low, 2] + (data[min(N_low, len(data)-1), 0] - data[js_low, 0] + delta) * slopes_low
-            y_low[2::3] = np.nan  # Separator
+                x_low[0::3] = data[js_low, 0]
+                x_low[1::3] = data[min(N_low, len(data)-1), 0] + delta
+                x_low[2::3] = np.nan  # Separator
+
+                y_low[0::3] = data[js_low, 2]
+                y_low[1::3] = data[js_low, 2] + (data[min(N_low, len(data)-1), 0] - data[js_low, 0] +   delta) * slopes_low
+                y_low[2::3] = np.nan  # Separator
+            else:
+                x_low = []
+                y_low = []
 
             return x_high, y_high, x_low, y_low
         
@@ -854,17 +863,18 @@ elif mode == 'backtest':
             """
             if self.is_paused:
                 return
-
+            
+            end_index = self.base_trend_number + self.frame_count + self.visual_number
+            if end_index >= len(self.data):
+                print("Reached end of data. Stopping the plot.")
+                self.timer.stop()
+                self.fps_timer.stop()
+                self.pause_plotting()
+                return
             
             self.frame_count += 1
             self.frame_count_fps += 1
             # print(f"Frame: {self.frame_count}") 
-            end_index = self.frame_count + self.visual_number
-            if end_index > len(self.data):
-                print("Reached end of data. Stopping the plot.")
-                self.timer.stop()
-                self.fps_timer.stop()
-                return
             
             if self.frame_count in self.plot_cache:
                 cached_data = self.plot_cache[self.frame_count]
@@ -945,8 +955,13 @@ elif mode == 'backtest':
             if self.frame_count in self.plot_cache:
                 cached_data = self.plot_cache[self.frame_count]
             else:
-                if self.frame_count + self.base_trend_number + self.visual_number <= len(self.data):
+                end_index = self.base_trend_number + self.frame_count + self.visual_number
+                if end_index <= len(self.data):
                     cached_data = self.organize_data()
+                else:
+                    print("Reached end of data. Stopping the plot.")
+                    self.pause_plotting()
+                    return
                     
                 if len(self.plot_cache) > self.cache_size:
                     removed_key, _ = self.plot_cache.popitem(last=False)
@@ -982,7 +997,7 @@ elif mode == 'backtest':
                 
                 
         def show_next_frame(self):
-            end_index = self.frame_count + self.visual_number + 1
+            end_index = self.base_trend_number + self.frame_count + self.visual_number + 1
             if end_index <= len(self.data):
                 self.frame_count += 1
                 self.load_frame_from_cache()
@@ -1026,7 +1041,7 @@ elif mode == 'backtest':
         
 
     trend_generator = backtest_calculate_trend_generator(threshold=threshold, data=data, initial_single_slope=initial_single_slope, update_trend_high=update_trend_high, update_trend_low=update_trend_low, calculate_trend=calculate_trend)
-    Plotter_backtest = Plotter(data, type_data, trend_generator, filter_trend ,base_trend_number = int(total_length * 0.8), visual_number=200, update_interval=30, cache_size = 500)
+    Plotter_backtest = Plotter(data, type_data, trend_generator, filter_trend ,base_trend_number = int(total_length * 0.8)-3, visual_number=20, update_interval=30, cache_size = 50)
     Plotter_backtest.run()
 
     
