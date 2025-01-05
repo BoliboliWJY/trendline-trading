@@ -325,7 +325,7 @@ import copy
 import cProfile
 import pstats
 import io
-
+#%%
 mode = 'realtime'
 mode = 'backtest'
 def profile_method(func):
@@ -379,31 +379,25 @@ if mode == 'realtime':
     plt.xlim(current_time * 1000 - visual_number * time_number(interval) * 1000, current_time * 1000 + time_number(interval) * 1000)
     plt.ylim(min(data[-visual_number:,2])* 0.9995, max(data[-visual_number:,1])* 1.0005)
     plt.show()
+      
        
 elif mode == 'backtest':
-    
-    
-    
-    def filter_trend(trend_high, trend_low, threshold=1):
-        filtered_trend_high = [[] for _ in range(len(trend_high))]
-        for i in range(1, len(trend_high)):
-            for slope, j in trend_high[i]:
-                if np.abs(slope) <= threshold:
-                    filtered_trend_high[i].append([slope, j])
-        filtered_trend_high = np.array(filtered_trend_high, dtype=object)
+    trend_config = {
+        'delay': 5,#生成延迟
+        'interval': time_number(interval) * 1000,#步长大小
         
-        filtered_trend_low = [[] for _ in range(len(trend_low))]
-        for i in range(1, len(trend_low)):
-            for slope, j in trend_low[i]:
-                if np.abs(slope) <= threshold:
-                    filtered_trend_low[i].append([slope, j])
-        filtered_trend_low = np.array(filtered_trend_low, dtype=object)
+        'filter_slope': False,#斜率大小限制
+        'slope_threshold': 0.0001,#最大斜率阈值
+    
+        'filter_line_age': True,#最小生成间隔
+        'min_line_age': 5,#最小生成间隔阈值
+    
+        'filter_distance': True,#距离限制，不能太近
+        'distance_threshold': 10,#最小距离阈值
         
-        
-        #暂时先不过滤
-        # filtered_trend_high = trend_high
-        # filtered_trend_low = trend_low
-        return filtered_trend_high, filtered_trend_low
+        'filter_trending_line': True,#处于趋势之中的线不考虑
+    } 
+    from src.filter.filters import filter_trend
 
     def backtest_calculate_trend_generator(data, initial_single_slope, update_trend_high, update_trend_low, calculate_trend):
         idx_high = 1
@@ -420,14 +414,7 @@ elif mode == 'backtest':
             initial_single_slope(backtest_data, trend=trend_low, idx=idx_low)
             if (i >= 2):
                 calculate_trend(data=backtest_data, update_trend_high=update_trend_high, update_trend_low=update_trend_low, trend_high=trend_high, trend_low=trend_low,start_idx=i)
-            #for deepcopy:
-            # trend_high.append(new_trend_high)
-            # trend_low.append(new_trend_low)
-            # #for shallow copy:
-            # filtered_trend_high = trend_high.copy()
-            # filtered_trend_low = trend_low.copy()
-            # filtered_trend_high, filtered_trend_low = filter_trend(filtered_trend_high, filtered_trend_low, data)
-                
+
             yield trend_high, trend_low
             
     import sys
@@ -522,14 +509,14 @@ elif mode == 'backtest':
                     self.plotter.show_next_frame()
             else:
                 super().keyPressEvent(event)
-    #%%
     # @profile_method
     class Plotter:
-        def __init__(self, data, type_data, trend_generator, filter_trend, base_trend_number = 1000, visual_number = 100, update_interval = 200, cache_size = 100):
+        def __init__(self, data, type_data, trend_generator, filter_trend, trend_config, base_trend_number = 1000, visual_number = 100, update_interval = 200, cache_size = 100):
             self.data = data
             self.type_data = type_data
             self.trend_generator = trend_generator
             self.filter_trend = filter_trend
+            self.trend_config = trend_config
             self.base_trend_number = base_trend_number
             self.visual_number = visual_number
             self.update_interval = update_interval
@@ -665,7 +652,7 @@ elif mode == 'backtest':
             N_high = len(trend_high)
             N_low = len(trend_low)
             data = self.data
-            delta = (data[1,0] - data[0,0]) * 5
+            delta = (data[1,0] - data[0,0]) * 20
             # Process trend_high
             slopes_high = []
             js_high = []
@@ -736,7 +723,7 @@ elif mode == 'backtest':
         def horizontal_line(self, trend_high, trend_low):
             N_high = len(trend_high)
             N_low = len(trend_low)
-            delta = (self.data[1,0] - self.data[0,0]) * 5
+            delta = (self.data[1,0] - self.data[0,0]) * 20
             slopes_high = []
             js_high = []
             is_high = []
@@ -812,15 +799,16 @@ elif mode == 'backtest':
             except StopIteration:
                 trend_high, trend_low = [], []
                 
-            trend_high, trend_low =self.filter_trend(trend_high, trend_low)#filter the trend in need    
+            trend_high, trend_low =self.filter_trend(trend_high, trend_low,self.data,self.trend_config)#filter the trend in need
                 
             x_high, y_high, x_low, y_low = self.trend_to_line(trend_high, trend_low)
-            self.update_plot_line('trend_high', x_high.flatten(), y_high.flatten())
-            self.update_plot_line('trend_low', x_low.flatten(), y_low.flatten())
+            self.safe_update_plot_line('trend_high', x_high, y_high)
+            self.safe_update_plot_line('trend_low', x_low, y_low)
             
             x_high, y_high, x_low, y_low = self.horizontal_line(trend_high, trend_low)  
-            self.update_plot_line('horizontal_high', x_high.flatten(), y_high.flatten())
-            self.update_plot_line('horizontal_low', x_low.flatten(), y_low.flatten())
+            
+            self.safe_update_plot_line('horizontal_high', x_high, y_high)
+            self.safe_update_plot_line('horizontal_low', x_low, y_low)
                 
 
             for config in self.plot_configs:
@@ -831,12 +819,18 @@ elif mode == 'backtest':
                 pairs = filtered_data[:, config['columns']].reshape(-1,4)
                 x_data = pairs[:, [0, 2]].flatten()
                 y_data = pairs[:, [1, 3]].flatten()
-                self.update_plot_line(config['name'], x_data, y_data)
+                self.safe_update_plot_line(config['name'], x_data, y_data)
             
             cache_data = self.extract_cache_data()
             cache_data['trend_high'] = [x_high, y_high]
             cache_data['trend_low'] = [x_low, y_low]
             self.plot_cache[0] = cache_data
+        
+        def safe_update_plot_line(self, plot_name, x_data, y_data):
+            if len(x_data) > 0 and len(y_data) > 0:
+                self.update_plot_line(plot_name, x_data, y_data)
+            else:
+                self.update_plot_line(plot_name, [], [])
             
         def organize_data(self):
             """a merged update line data for manual and auto operation
@@ -848,7 +842,7 @@ elif mode == 'backtest':
             except StopIteration:
                 trend_high, trend_low = [], []
                 
-            trend_high, trend_low =self.filter_trend(trend_high, trend_low)#filter the trend in need  
+            trend_high, trend_low =self.filter_trend(trend_high, trend_low,self.data,self.trend_config)#filter the trend in need  
             
             x_high, y_high, x_low, y_low = self.trend_to_line(trend_high, trend_low)
             regular_cache = self.extract_cache_data()
@@ -902,9 +896,9 @@ elif mode == 'backtest':
                     if isinstance(pairs, np.ndarray) and pairs.size > 0:
                         x_data = pairs[:, [0, 2]].flatten()
                         y_data = pairs[:, [1, 3]].flatten()
-                        self.update_plot_line(plot_name, x_data, y_data)
+                        self.safe_update_plot_line(plot_name, x_data, y_data)
                     else:
-                        self.update_plot_line(plot_name, [], [])
+                        self.safe_update_plot_line(plot_name, [], [])
                     
             self.set_plot_ranges(self.current_data)
         
@@ -915,29 +909,15 @@ elif mode == 'backtest':
             x_high, y_high = cached_data.get('trend_high', ([], []))
             x_low, y_low = cached_data.get('trend_low', ([], []))
 
-            if len(x_high) > 0 and len(y_high) > 0:
-                self.update_plot_line('trend_high', x_high.flatten(), y_high.flatten())
-            else:
-                self.update_plot_line('trend_high', [], [])
-
-            if len(x_low) > 0 and len(y_low) > 0:
-                self.update_plot_line('trend_low', x_low.flatten(), y_low.flatten())
-            else:
-                self.update_plot_line('trend_low', [], [])
+            self.safe_update_plot_line('trend_high', x_high, y_high)
+            self.safe_update_plot_line('trend_low', x_low, y_low)
         
         def update_horizontal_lines(self, cached_data):
             x_high, y_high = cached_data.get('horizontal_high', ([], []))
             x_low, y_low = cached_data.get('horizontal_low', ([], []))
             
-            if len(x_high) > 0 and len(y_high) > 0:
-                self.update_plot_line('horizontal_high', x_high.flatten(), y_high.flatten())
-            else:
-                self.update_plot_line('horizontal_high', [], [])
-                
-            if len(x_low) > 0 and len(y_low) > 0:
-                self.update_plot_line('horizontal_low', x_low.flatten(), y_low.flatten())
-            else:
-                self.update_plot_line('horizontal_low', [], [])
+            self.safe_update_plot_line('horizontal_high', x_high, y_high)    
+            self.safe_update_plot_line('horizontal_low', x_low, y_low)
             
         def on_close(self, event):
             self.timer.stop()
@@ -983,9 +963,9 @@ elif mode == 'backtest':
                 if isinstance(pairs, np.ndarray) and pairs.size > 0:
                     x_data = pairs[:, [0, 2]].flatten()
                     y_data = pairs[:, [1, 3]].flatten()
-                    self.update_plot_line(plot_name, x_data, y_data)
+                    self.safe_update_plot_line(plot_name, x_data, y_data)
                 else:
-                    self.update_plot_line(plot_name, [], [])
+                    self.safe_update_plot_line(plot_name, [], [])
             # self.set_plot_ranges(self.current_data) #手动查看时不修改xy范围
                 
         def get_min_cached_frame(self):
@@ -1043,20 +1023,20 @@ elif mode == 'backtest':
             
             sys.exit(self.app.exec_())
             
-    aim_time = '2024-12-31 03:00:00'
+    aim_time = '2025-1-3 07:00:00'
     aim_time = datetime.datetime.strptime(aim_time, '%Y-%m-%d %H:%M:%S').timestamp() * 1000
-    index = np.searchsorted(data[:,0], aim_time, side='right')
+    index = np.searchsorted(data[:,0], aim_time, side='left')
     if index < len(data):
         print(f"First index with data[:,0] > aim_time is {index}, with timestamp {data[index, 0]}")
     else:
         print("No data point found with data[:,0] > aim_time")
     
-    visual_number = 200
+    visual_number = 800
     base_trend_number = index - visual_number
-    base_trend_number = 1000
+    # base_trend_number = 8500
     
     trend_generator = backtest_calculate_trend_generator(data=data, initial_single_slope=initial_single_slope, update_trend_high=update_trend_high, update_trend_low=update_trend_low, calculate_trend=calculate_trend)
-    Plotter_backtest = Plotter(data, type_data, trend_generator, filter_trend ,base_trend_number = base_trend_number, visual_number=visual_number, update_interval=30, cache_size = visual_number*2)
+    Plotter_backtest = Plotter(data, type_data, trend_generator, filter_trend, trend_config, base_trend_number = base_trend_number, visual_number=visual_number, update_interval=30, cache_size = visual_number*2)
     Plotter_backtest.run()
 
     
