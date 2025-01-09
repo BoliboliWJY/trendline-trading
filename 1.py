@@ -88,7 +88,7 @@ key = 'uiY3WGKVNEaCkntmyikLCALO9O63PBAYcVDwLw0Xu66AgcrEBXab0UANMbWZOsj4'
 secret = 'O7zn1HEFTr0e9msT1m52Nu6utZtIkmicRsbUtpSJSdVJrTlLs2NIVLLhiwALXKez'
 client = Client(key, secret)
 coin_type = "BTCUSDT"
-aim_time = '2024-12-16  00:00:00'
+aim_time = '2025-01-05  06:30:30'
 mode = 'backtest' #'realtime' or 'backtest'
 threshold = 1
 total_length = 10000
@@ -339,7 +339,7 @@ def profile_method(func):
 
                 profiler.disable()
                 s = io.StringIO()
-                sortby = 'cumtime'
+                sortby = 'tottime'
                 ps = pstats.Stats(profiler, stream=s).sort_stats(sortby)
                 ps.print_stats(10)
                 print(s.getvalue())
@@ -398,7 +398,7 @@ elif mode == 'backtest':
         'distance_threshold': 20,#最小距离阈值
         
         'filter_trending_line': True,#处于趋势之中的线不考虑
-        'filter_trending_line_number': 1,#连接当前点趋势的线数量阈值
+        'filter_trending_line_number': 3,#连接当前点趋势的线数量阈值
     } 
     
     from src.filter.filters import filter_trend, filter_trend_initial
@@ -520,7 +520,7 @@ elif mode == 'backtest':
                     self.plotter.show_next_frame()
             else:
                 super().keyPressEvent(event)
-    # @profile_method
+    @profile_method
     class Plotter:
         def __init__(self, data, type_data, trend_generator, filter_trend, trend_config, base_trend_number = 1000, visual_number = 100, update_interval = 200, cache_size = 100):
             self.data = data
@@ -851,7 +851,8 @@ elif mode == 'backtest':
                 self.update_plot_line(plot_name, x_data, y_data)
             else:
                 self.update_plot_line(plot_name, [], [])
-            
+        
+        @profile_method
         def organize_data(self):
             """a merged update line data for manual and auto operation
             """
@@ -870,23 +871,20 @@ elif mode == 'backtest':
             self.last_filtered_high.append(trend_high[-self.trend_config.get('delay', 10):][0])
             self.last_filtered_low.append(trend_low[-self.trend_config.get('delay', 10):][0])
             
-            trend_high, trend_low =self.filter_trend(trend_high, trend_low, self.last_filtered_high,self.last_filtered_low, self.data,self.trend_config)#filter the trend in need  
+            self.last_filtered_high, self.last_filtered_low =self.filter_trend(trend_high, trend_low, self.last_filtered_high,self.last_filtered_low, self.data,self.trend_config)#filter the trend in need  
             
             x_high = []
             y_high = []
             x_low = []
             y_low = []
             
-            x_high, y_high, x_low, y_low = self.trend_to_line(trend_high, trend_low)
-            
-            self.last_filtered_high = copy.deepcopy(trend_high)
-            self.last_filtered_low = copy.deepcopy(trend_low)
+            x_high, y_high, x_low, y_low = self.trend_to_line(self.last_filtered_high, self.last_filtered_low)
             
             regular_cache = self.extract_cache_data()
             regular_cache['trend_high'] = [x_high, y_high]
             regular_cache['trend_low'] = [x_low, y_low]
             
-            x_high, y_high, x_low, y_low = self.horizontal_line(trend_high, trend_low)
+            x_high, y_high, x_low, y_low = self.horizontal_line(self.last_filtered_high, self.last_filtered_low)
             regular_cache['horizontal_high'] = [x_high, y_high]
             regular_cache['horizontal_low'] = [x_low, y_low]
             
@@ -1068,7 +1066,7 @@ elif mode == 'backtest':
     else:
         print("No data point found with data[:,0] > aim_time")
     
-    visual_number = 200
+    visual_number = 800
     base_trend_number = index - visual_number
     # base_trend_number = 10
     
