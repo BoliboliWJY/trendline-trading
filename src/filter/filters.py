@@ -72,7 +72,7 @@ def filter_by_trending_line(trend):
 
 def filter_trend(regional_trend_high, regional_trend_low, trend_high, trend_low, data, config):
     """
-    过滤趋势
+    过滤趋势,只过滤最后一个元素
     """
     
     
