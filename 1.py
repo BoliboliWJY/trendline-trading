@@ -12,21 +12,29 @@ from src.time_number import time_number
 from src.data_fetcher import get_data_in_batches
 #%%
 #获取历史数据
+total_result = [0, 0]
 start_time = time.perf_counter()
 
 with open('config/basic_config.yaml', 'r') as file:
-    config = yaml.safe_load(file)
+    basic_config = yaml.safe_load(file)
 
-key = config['key']
-secret = config['secret']
-coin_type = config['coin_type']
-aim_time = config['aim_time']
-total_length = config['total_length']
-interval = config['interval']
+
+
+key = basic_config['key']
+secret = basic_config['secret']
+coin_type = basic_config['coin_type']
+aim_time = basic_config['aim_time']
+total_length = basic_config['total_length']
+interval = basic_config['interval']
 current_time = int(time.time())
 # limit = 10
 
-directory = os.path.join(os.getcwd(), coin_type)
+# client = Client(key, secret)
+# coin_types = [coin['symbol'] for coin in client.coin_list()]
+backtest_dir = os.path.join(os.getcwd(), 'backtest')
+os.makedirs(backtest_dir, exist_ok=True)
+# for coin_type in coin_types:
+directory = os.path.join(backtest_dir, coin_type)
 filename = os.path.join(directory, f"{coin_type}_{interval}_{total_length}.npy")
 typename = os.path.join(directory, f"{coin_type}_{interval}_{total_length}_type.npy")
 
@@ -76,24 +84,32 @@ def profile_method(func):
    return wrapper
 
 trend_config = {
-    'delay': 5,#生成延迟
+    'delay': 4,#生成延迟
     'interval': time_number(interval) * 1000,#步长大小
-    
+     
     'filter_slope': False,#斜率大小限制
     'slope_threshold': 0.0001,#最大斜率阈值
 
     'filter_line_age': True,#趋势年龄限制
-    'min_line_age': 5,#最小趋势年龄阈值
+    'min_line_age': 40,#最小趋势年龄阈值
 
     'filter_distance': True,#距离限制，不能太近
-    'distance_threshold': 20,#最小距离阈值
+    'distance_threshold': 100,#最小距离阈值
     
     'filter_trending_line': True,#处于趋势之中的线不考虑
-    'filter_trending_line_number': 3,#连接当前点趋势的线数量阈值
+    'filter_trending_line_number': 5,#连接当前点趋势的线数量阈值
 }
 
 trading_config = {
+    'fee': 0.002,#手续费
+    'stop_loss': 0.0005,#止损
+    'take_profit': 0.001,#止盈
     
+    'high_threshold': 0.0002,
+    'low_threshold': 0.0002,
+    'number': 1, #密集趋势线数量阈值
+    
+    'reverse_percent': 0.02, #潜在利润百分比
 }
 
 def backtest_calculate_trend_generator(data, initial_single_slope, calculate_trend):
@@ -211,6 +227,7 @@ class PlotWindow(QtWidgets.QWidget):
                     self.plotter.show_next_frame()
             else:
                 super().keyPressEvent(event)
+#%%
 # @profile_method
 class Plotter:
     def __init__(self, data, type_data, trend_generator, filter_trend, trend_config, base_trend_number = 1000, visual_number = 100, update_interval = 200, cache_size = 100):
@@ -223,15 +240,21 @@ class Plotter:
         self.visual_number = visual_number
         self.update_interval = update_interval
         self.frame_count = 0
-        self.is_paused = True  # State to track pause/resume
+        
         self.plot_cache = OrderedDict()
         self.cache_size = cache_size
         
         self.deleted_trends = {}
         self.last_filtered_high = []
         self.last_filtered_low = []
+
+        self.record_trade = []
+        self.result_trade = []
+        # self.total_result = [0, 0]
+        self.total_result = total_result
         
-        # self.trading_strategy = TradingStrategy(data = self.data, trend_high = self.trend_high, trend_low = self.trend_low, trend_config = trading_config)
+        self.visulize_mode = False #是否可视化
+        self.is_paused = False  # State to track pause/resume
         
         #FPS
         self.frame_count_fps = 0
@@ -319,6 +342,24 @@ class Plotter:
             horizontal_pen_low = pg.mkPen(color='white', width=0.5, style=QtCore.Qt.SolidLine)
             self.plot_lines['horizontal_low'] = self.plot.plot([], [], pen=horizontal_pen_low, name='Horizontal Low')
             
+            self.plot_lines['long'] = self.plot.plot(
+                    [], [], 
+                    pen=None, 
+                    symbol='o', 
+                    symbolBrush='green', 
+                    symbolSize=20, 
+                    name='Long'
+                )
+                
+            self.plot_lines['short'] = self.plot.plot(
+                    [], [], 
+                    pen=None, 
+                    symbol='o', 
+                    symbolBrush='red', 
+                    symbolSize=20, 
+                    name='Short'
+                )
+            
     def set_plot_ranges(self, data_slice):
         """
         Sets the X and Y ranges of the plot based on the provided data slice.
@@ -359,7 +400,7 @@ class Plotter:
             N_high = len(trend_high)
             N_low = len(trend_low)
             data = self.data
-            delta = (data[1,0] - data[0,0]) * 20
+            delta = (data[1,0] - data[0,0]) * 120
             # Process trend_high
             slopes_high = []
             js_high = []
@@ -512,11 +553,15 @@ class Plotter:
             self.last_filtered_high = copy.deepcopy(trend_high)
             self.last_filtered_low = copy.deepcopy(trend_low)
                 
-            x_high, y_high, x_low, y_low = self.trend_to_line(trend_high, trend_low)
+            if self.visulize_mode:
+                x_high, y_high, x_low, y_low = self.trend_to_line(trend_high, trend_low)
+                x_high, y_high, x_low, y_low = self.horizontal_line(trend_high, trend_low)
+                
+            else:
+                x_high, y_high, x_low, y_low = [], [], [], []
+            
             self.safe_update_plot_line('trend_high', x_high, y_high)
             self.safe_update_plot_line('trend_low', x_low, y_low)
-            
-            x_high, y_high, x_low, y_low = self.horizontal_line(trend_high, trend_low)  
             
             self.safe_update_plot_line('horizontal_high', x_high, y_high)
             self.safe_update_plot_line('horizontal_low', x_low, y_low)
@@ -568,16 +613,36 @@ class Plotter:
         y_high = []
         x_low = []
         y_low = []
-        
-        x_high, y_high, x_low, y_low = self.trend_to_line(self.last_filtered_high, self.last_filtered_low)
-        
+        self.record_trade = TradingStrategy(data = self.data, trend_high = self.last_filtered_high, trend_low = self.last_filtered_low, basic_config = basic_config, trend_config = trend_config, trading_config = trading_config, record_trade = self.record_trade, result_trade = self.result_trade, total_result = self.total_result).return_data()
+
+        if self.visulize_mode:
+            x_high, y_high, x_low, y_low = self.trend_to_line(self.last_filtered_high, self.last_filtered_low)
+            x_high, y_high, x_low, y_low = self.horizontal_line(self.last_filtered_high, self.last_filtered_low)
+            
         regular_cache = self.extract_cache_data()
         regular_cache['trend_high'] = [x_high, y_high]
         regular_cache['trend_low'] = [x_low, y_low]
         
-        x_high, y_high, x_low, y_low = self.horizontal_line(self.last_filtered_high, self.last_filtered_low)
+        
         regular_cache['horizontal_high'] = [x_high, y_high]
         regular_cache['horizontal_low'] = [x_low, y_low]
+        
+        
+        long_x = []
+        long_y = []
+        short_x = []
+        short_y = []
+        for i in range(len(self.record_trade)):
+            if self.record_trade[i][-1] == 'long':
+                long_x.append(self.record_trade[i][0][0])
+                long_y.append(self.record_trade[i][0][1])
+            elif self.record_trade[i][-1] == 'short':
+                short_x.append(self.record_trade[i][0][0])
+                short_y.append(self.record_trade[i][0][2])
+        
+        self.plot_lines['long'].setData(long_x, long_y)
+        self.plot_lines['short'].setData(short_x, short_y)
+
         
         self.plot_cache[self.frame_count] = regular_cache
         return regular_cache
@@ -595,6 +660,10 @@ class Plotter:
             self.timer.stop()
             self.fps_timer.stop()
             self.pause_plotting()
+            
+            self.win.close()
+            self.app.quit()
+            
             return
         
         self.frame_count += 1
@@ -746,7 +815,7 @@ class Plotter:
     def run(self):
         self.win.show()
         
-        sys.exit(self.app.exec_())
+        self.app.exec_()
         
         
 aim_time = datetime.datetime.strptime(aim_time, '%Y-%m-%d %H:%M:%S').timestamp() * 1000
@@ -756,15 +825,15 @@ if index < len(data):
 else:
     print("No data point found with data[:,0] > aim_time")
 
-visual_number = 800
+visual_number = basic_config['visual_number']
 base_trend_number = index - visual_number
 # base_trend_number = 10
 
 trend_generator = backtest_calculate_trend_generator(data=data, initial_single_slope=initial_single_slope, calculate_trend=calculate_trend)
-Plotter_backtest = Plotter(data, type_data, trend_generator, filter_trend, trend_config, base_trend_number = base_trend_number, visual_number=visual_number, update_interval=30, cache_size = visual_number*2)
+Plotter_backtest = Plotter(data, type_data, trend_generator, filter_trend, trend_config, base_trend_number = base_trend_number, visual_number=visual_number, update_interval=20, cache_size = visual_number*2)
 Plotter_backtest.run()
 
-
+print("Plotter has ended. Continuing with post-Plotter operations...")
     
     
     
