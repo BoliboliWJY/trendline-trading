@@ -26,7 +26,7 @@ def get_data_in_batches(client,coin_type,interval,total_length,current_time,limi
         start_time = current_time - time_number(interval) * (limit * (i + 1) + left_num)
         end_time = start_time + time_number(interval) * limit
         # print(start_time)
-        batch_data = np.array(client.klines(symbol=coin_type, interval=interval, startTime=start_time*1000, endTime=end_time * 1000, limit=limit))
+        batch_data = np.array(client.get_klines(symbol=coin_type, interval=interval, startTime=start_time*1000, endTime=end_time * 1000, limit=limit))
         start_idx = (total_batches - 1 - i) * limit
         end_idx = start_idx + batch_data.shape[0]
         data[start_idx:end_idx, :] = batch_data
@@ -34,7 +34,7 @@ def get_data_in_batches(client,coin_type,interval,total_length,current_time,limi
     if left_num != 0:
         start_time = current_time - time_number(interval) * left_num
         end_time = start_time + time_number(interval) * left_num
-        batch_data = np.array(client.klines(symbol=coin_type, interval=interval,    startTime=start_time*1000, endTime=end_time * 1000,  limit=left_num))
+        batch_data = np.array(client.get_klines(symbol=coin_type, interval=interval,    startTime=start_time*1000, endTime=end_time * 1000,  limit=left_num))
         start_idx = total_length - left_num
         end_idx = start_idx + left_num
         data[start_idx:end_idx, :] = batch_data

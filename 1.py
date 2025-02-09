@@ -1,24 +1,32 @@
-# %%
-from binance.spot import Spot as Client
+
+#from binance.spot import Spot as Client
+from binance import Client
 import time
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 #%%
 import numpy as np
 import os
+
 import yaml
 
 from src.time_number import time_number
 from src.data_fetcher import get_data_in_batches
 #%%
 #获取历史数据
+
+###############################################
+# 全局变量及配置加载
+###############################################
+# 用于统计交易结果，格式为 [盈利, 亏损]
 total_result = [0, 0]
+
+# 记录获取历史数据的开始时间
 start_time = time.perf_counter()
 
+# 从配置文件中加载基本参数（包括API密钥、币种、目标时间、数据总长度、K线间隔等）
 with open('config/basic_config.yaml', 'r') as file:
     basic_config = yaml.safe_load(file)
-
-
 
 key = basic_config['key']
 secret = basic_config['secret']
@@ -27,29 +35,29 @@ aim_time = basic_config['aim_time']
 total_length = basic_config['total_length']
 interval = basic_config['interval']
 current_time = int(time.time())
-# limit = 10
 
-# client = Client(key, secret)
-# coin_types = [coin['symbol'] for coin in client.coin_list()]
+# 设置回测数据存储目录
 backtest_dir = os.path.join(os.getcwd(), 'backtest')
 os.makedirs(backtest_dir, exist_ok=True)
-# for coin_type in coin_types:
 directory = os.path.join(backtest_dir, coin_type)
 filename = os.path.join(directory, f"{coin_type}_{interval}_{total_length}.npy")
 typename = os.path.join(directory, f"{coin_type}_{interval}_{total_length}_type.npy")
-
 os.makedirs(directory, exist_ok=True)
 
+# 检查数据文件是否存在
 if os.path.exists(filename) and os.path.exists(typename):
-    # Load the data if the files exist
+    # 如果存在，则加载数据
     data = np.load(filename)
+
     type_data = np.load(typename)
 else:
+    # 如果数据文件不存在，则获取数据
     limit = total_length if total_length < 1000 else 1000
     client = Client(key, secret)
     [data, type_data] = get_data_in_batches(client,coin_type,interval,total_length,current_time,limit)
     np.save(filename, data)
     np.save(typename, type_data)
+
 end_time = time.perf_counter()
 elapsed_time = end_time - start_time
 print(f"获取数据耗时: {elapsed_time:.6f} 秒")
@@ -65,6 +73,9 @@ from src.filter.filters import filter_trend, filter_trend_initial
 from src.trading_strategy import TradingStrategy
 from src.trend_process import calculate_trend, initial_single_slope
 #%%
+###############################################
+# 辅助函数与装饰器定义
+###############################################
 def profile_method(func):
     #how to use: @profile_method before the function you want to profile
    def wrapper(*args, **kwargs):
@@ -83,6 +94,9 @@ def profile_method(func):
        return result
    return wrapper
 
+###############################################
+# 趋势和交易策略的配置参数
+###############################################
 trend_config = {
     'delay': 4,#生成延迟
     'interval': time_number(interval) * 1000,#步长大小
@@ -112,6 +126,9 @@ trading_config = {
     'reverse_percent': 0.02, #潜在利润百分比
 }
 
+###############################################
+# 回测用趋势数据生成器函数
+###############################################
 def backtest_calculate_trend_generator(data, initial_single_slope, calculate_trend):
     idx_high = 1
     idx_low = 2
@@ -121,8 +138,10 @@ def backtest_calculate_trend_generator(data, initial_single_slope, calculate_tre
         trend_high.append(SortedList(key=lambda x: x[0]))
         trend_low.append(SortedList(key=lambda x: x[0]))
         
+        # 当前回测数据：前 i+1 个数据
         backtest_data = data[:i+1]
         
+        # 计算初始单点斜率
         initial_single_slope(backtest_data, trend=trend_high, idx=idx_high)
         initial_single_slope(backtest_data, trend=trend_low, idx=idx_low)
         
@@ -141,16 +160,20 @@ from pyqtgraph.Qt import QtCore, QtWidgets, QtGui
 import datetime
 import numpy as np
 from collections import OrderedDict
-    
+
+###############################################
+# PyQtGraph 可视化窗口及绘图轴定义
+###############################################
 class TimeAxisItem(pg.AxisItem):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
     def tickStrings(self, values, scale, spacing):
+        # 将时间戳转换为日期时间字符串
         return [
             datetime.datetime.fromtimestamp(value / 1000).strftime("%Y-%m-%d %H:%M:%S")
             for value in values
         ]
-    
+
 class PlotWindow(QtWidgets.QWidget):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
@@ -228,40 +251,52 @@ class PlotWindow(QtWidgets.QWidget):
             else:
                 super().keyPressEvent(event)
 #%%
+###############################################
+# Plotter 类：数据可视化、趋势更新、缓存管理与交易策略执行
+###############################################
 # @profile_method
 class Plotter:
     def __init__(self, data, type_data, trend_generator, filter_trend, trend_config, base_trend_number = 1000, visual_number = 100, update_interval = 200, cache_size = 100):
+        # 保存基本数据及配置
         self.data = data
         self.type_data = type_data
         self.trend_generator = trend_generator
         self.filter_trend = filter_trend
         self.trend_config = trend_config
+
+        # 基本参数
         self.base_trend_number = base_trend_number
         self.visual_number = visual_number
         self.update_interval = update_interval
         self.frame_count = 0
         
+        # 缓存管理
         self.plot_cache = OrderedDict()
         self.cache_size = cache_size
         
+        # 趋势管理
         self.deleted_trends = {}
         self.last_filtered_high = []
         self.last_filtered_low = []
 
+        # 交易记录
         self.record_trade = []
         self.result_trade = []
         # self.total_result = [0, 0]
         self.total_result = total_result
         
-        self.visulize_mode = False #是否可视化
+        # 可视化参数
+        self.visulize_mode = True #是否可视化
         self.is_paused = False  # State to track pause/resume
         
-        #FPS
+        # FPS 计算  
         self.frame_count_fps = 0
         self.last_time_fps = time.time()
         self.fps = 0
-        #application and window
+        
+        # 应用和窗口
         self.app = QtWidgets.QApplication(sys.argv)
+
         self.win = PlotWindow()
         self.win.plotter = self  # Reference for key events
         
@@ -281,12 +316,15 @@ class Plotter:
         self.timer.timeout.connect(self.update_plot)
         self.timer.start(self.update_interval)
         
-        #fps
+        #FPS 计时器，每秒更新一次
         self.fps_timer = QtCore.QTimer()
         self.fps_timer.timeout.connect(self.update_fps)
         self.fps_timer.start(1000)
+        
+        # 窗口关闭事件
         self.win.closeEvent = self.on_close
      
+
     def initialize_plot_lines(self, ):
             """
             Initializes all plot lines based on the plot configurations.
@@ -617,13 +655,13 @@ class Plotter:
 
         if self.visulize_mode:
             x_high, y_high, x_low, y_low = self.trend_to_line(self.last_filtered_high, self.last_filtered_low)
-            x_high, y_high, x_low, y_low = self.horizontal_line(self.last_filtered_high, self.last_filtered_low)
             
         regular_cache = self.extract_cache_data()
         regular_cache['trend_high'] = [x_high, y_high]
         regular_cache['trend_low'] = [x_low, y_low]
         
-        
+        if self.visulize_mode:
+            x_high, y_high, x_low, y_low = self.horizontal_line(self.last_filtered_high, self.last_filtered_low)
         regular_cache['horizontal_high'] = [x_high, y_high]
         regular_cache['horizontal_low'] = [x_low, y_low]
         
@@ -817,8 +855,12 @@ class Plotter:
         
         self.app.exec_()
         
-        
+###############################################
+# 主程序入口：目标时间索引计算、初始化及运行 Plotter
+###############################################
+# 将目标时间字符串转换为毫秒时间戳        
 aim_time = datetime.datetime.strptime(aim_time, '%Y-%m-%d %H:%M:%S').timestamp() * 1000
+# 查找第一条时间大于目标时间的数据索引
 index = np.searchsorted(data[:,0], aim_time, side='left')
 if index < len(data):
     print(f"First index with data[:,0] > aim_time is {index}, with timestamp {data[index, 0]}")
@@ -827,11 +869,17 @@ else:
 
 visual_number = basic_config['visual_number']
 base_trend_number = index - visual_number
-# base_trend_number = 10
+# 或者使用固定值，比如： base_trend_number = 10
 
+# 初始化趋势数据生成器
 trend_generator = backtest_calculate_trend_generator(data=data, initial_single_slope=initial_single_slope, calculate_trend=calculate_trend)
+
+# 初始化 Plotter 类
 Plotter_backtest = Plotter(data, type_data, trend_generator, filter_trend, trend_config, base_trend_number = base_trend_number, visual_number=visual_number, update_interval=20, cache_size = visual_number*2)
+
+# 运行 Plotter
 Plotter_backtest.run()
+
 
 print("Plotter has ended. Continuing with post-Plotter operations...")
     

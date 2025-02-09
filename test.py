@@ -1,4 +1,5 @@
-from binance.spot import Spot as Client
+# from binance.spot import Spot as Client
+from binance import Client
 import time
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation

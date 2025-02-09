@@ -1,3 +1,148 @@
 7FOA3N8t9jWz2gZhzNJVBzCQnW5VYqm5bXpVDRVnu44volIaPSlP4KDxmuBeX3YZ
 
 anaW9TQYTnHh51qSdUGV0w1PWVTWlBptmeQFKgAVAmSQohVUovWXqIiAVwwjbns5
+
+
+{
+    // 启用命令中心，便于通过命令执行各项功能
+    "window.commandCenter": true,
+
+    // Python 默认解释器的路径，用于运行 Python 程序和相关扩展
+    "python.defaultInterpreterPath": "C:\\Users\\Ikun\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+
+    // 配置使用的 Python 语言服务器，此处采用 VS Code 默认的语言服务器
+    "python.languageServer": "Default",
+
+    // 文件自动保存配置，“afterDelay”表示在编辑器空闲一定时间后自动保存
+    "files.autoSave": "afterDelay",
+
+    // 开启自动猜测文件编码，适用于打开编码不明确的文件
+    "files.autoGuessEncoding": true,
+
+    // 启用侧边栏列表的平滑滚动效果，提升视觉体验
+    "workbench.list.smoothScrolling": true,
+
+    // 启用编辑器中光标的平滑移动动画
+    "editor.cursorSmoothCaretAnimation": "on",
+
+    // 开启编辑器内容的平滑滚动效果，使滚动更加流畅
+    "editor.smoothScrolling": true,
+
+    // 设置光标闪烁样式为平滑模式
+    "editor.cursorBlinking": "smooth",
+
+    // 开启鼠标滚轮缩放功能，可以通过滚轮调整编辑器的缩放级别
+    "editor.mouseWheelZoom": true,
+
+    // 保存文件时自动格式化代码，保证代码风格统一
+    "editor.formatOnSave": true,
+
+    // 粘贴内容时自动格式化代码，保持代码排版一致
+    "editor.formatOnPaste": true,
+
+    // 输入时自动格式化代码，有助于实时保持代码整洁
+    "editor.formatOnType": true,
+
+    
+    "editor.autoIndent": "advanced",
+
+    // 打开自动换行，使超出编辑器宽度的文本自动换行显示
+    "editor.wordWrap": "on",
+
+    // 显示括号匹配的辅助指引，有助于辨识代码块的开始与结束
+    "editor.guides.bracketPairs": true,
+
+    // 下列设置已在较新版本 VS Code 中默认开启，因此被注释掉
+    //"editor.bracketPairColorization.enabled": true, (此设置vscode在较新版本已默认开启)
+
+    // 代码建议时允许代码片段(snippet)不阻止其他建议的显示
+    "editor.suggest.snippetsPreventQuickSuggestions": false,
+
+    // 使用回车键接受建议时采用智能处理，只有在合适情况下才自动接受补全
+    "editor.acceptSuggestionOnEnter": "smart",
+
+    // 快速建议列表按最近使用顺序排序，方便选择常用建议
+    "editor.suggestSelection": "recentlyUsed",
+    
+    // 删除文件时不再弹出确认对话框，直接删除
+    "explorer.confirmDelete": false,
+
+    // 自定义工作台及编辑器中的颜色设置
+    "workbench.colorCustomizations": {
+        // --- 编辑区文本高亮 ---
+        // 单词高亮的背景色，调整透明度使颜色柔和同时醒目
+        "editor.wordHighlightBackground": "#82B1FF44",
+        // 更强高亮效果的背景色
+        "editor.wordHighlightStrongBackground": "#448AFF44",
+        
+        // --- 搜索匹配相关 ---
+        // 当前匹配项的背景色
+        "editor.findMatchBackground": "#FFEB3B66",
+        // 当前匹配项的边框颜色，帮助突出显示
+        "editor.findMatchBorder": "#FFEB3BFF",
+        // 其他匹配项的背景色
+        "editor.findMatchHighlightBackground": "#FFEB3B44",
+        
+        // --- 滚动条（概览标尺）的高亮标记 ---
+        // 在概览标尺上显示的单词高亮颜色
+        "editorOverviewRuler.wordHighlightForeground": "#82B1FF66",
+        // 对应更强高亮的颜色
+        "editorOverviewRuler.wordHighlightStrongForeground": "#448AFF66",
+        // 当前搜索匹配项在概览标尺中的颜色
+        "editorOverviewRuler.findMatchForeground": "#FFEB3B66",
+        // 其他搜索匹配项在概览标尺中的颜色
+        "editorOverviewRuler.findMatchHighlightForeground": "#FFEB3B88",
+        
+        // --- 附加颜色配置 ---
+        // 编辑器中选中文本的背景色，使选区更明显
+        "editor.selectionBackground": "#ADD6FF50",
+        // 选中文本的额外高亮效果
+        "editor.selectionHighlightBackground": "#ADD6FF33",
+        // 悬停（如显示提示信息时）的高亮背景色
+        "editor.hoverHighlightBackground": "#FFD54F33"
+    },
+
+    // 定义哪些设置将应用到所有 VS Code 配置文件，此处设为空数组表示不全局应用
+    "workbench.settings.applyToAllProfiles": [],
+
+    // 针对 Python 文件的专用设置
+    "[python]": {
+        // 使用 Black 作为 Python 文件的默认代码格式化工具
+        "editor.defaultFormatter": "ms-python.black-formatter",
+        // 保存时自动执行整理导入操作，保持代码的整洁有序
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "always"
+        }
+    },
+
+    // Black 格式化工具的参数设置，这里将最大行宽设置为 88 字符（符合 PEP 8 规范）
+    "black-formatter.args": [
+        "--line-length",
+        "88"
+    ],
+
+    // 配置编辑器快速建议的显示规则
+    "editor.quickSuggestions": {
+        "other": true,      // 除字符串和注释之外的部分启用建议
+        "comments": false,  // 禁止在注释中显示自动建议
+        "strings": true     // 在字符串中的编辑也启用建议
+    },
+
+    // 启用函数参数提示，以辅助开发者了解函数调用参数信息
+    "editor.parameterHints.enabled": true,
+
+    // 配置多光标操作的激活修饰键，“ctrlCmd”表示 Windows/Linux 用 Ctrl 键，macOS 用 Command 键
+    "editor.multiCursorModifier": "ctrlCmd",
+
+    // 为 Python 终端命令配置启动参数，这里将启动 IPython 作为交互式 shell
+    "python.terminal.launchArgs": [
+        "-m",
+        "IPython"
+    ], // 注释：macOS 上使用 Command 键，Windows/Linux上则使用 Ctrl 键
+
+    // 设置自定义窗口对话框样式
+    "window.dialogStyle": "custom",
+
+    // 在调试模式下，在编辑器的概览标尺中显示断点位置
+    "debug.showBreakpointsInOverviewRuler": true
+}

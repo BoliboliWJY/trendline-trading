@@ -1,5 +1,4 @@
 import numpy as np
-from bisect import bisect_left
 # !!!不用所有都迭代，毕竟每个斜率都是顺序排列的
 
 def filter_trend_initial(trend_high, trend_low, data, config):
