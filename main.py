@@ -2,17 +2,19 @@
 import time
 import datetime
 import numpy as np
-from binance import Client
+from binance.spot import Spot as Client
+
+# from binance import Client
 from src.config_manager import load_basic_config
 from src.data_loader import load_or_fetch_data
 from src.trend_generator import backtest_calculate_trend_generator
 from src.trend_process import initial_single_slope, calculate_trend
 from src.filter.filters import filter_trend
 from src.time_number import time_number
-from src.plot_figure.plotter import Plotter
 from src.latest_data.new_price import get_current_price
 from src.latest_data.latest_klines import get_latest_klines
-
+from src.backtester.backtester import Backtester
+from src.utils import profile_method
 
 # %%
 def main():
@@ -87,25 +89,18 @@ def main():
             calculate_trend=calculate_trend,
         )
 
-        # 初始化 Plotter 类用于回测数据可视化
-        plotter_app = Plotter(
+        backtester = Backtester(
             data,
             type_data,
             trend_generator,
             filter_trend,
             trend_config,
-            trading_config,
-            basic_config,
-            base_trend_number=base_trend_number,
-            visual_number=visual_number,
-            update_interval=20,
-            cache_size=visual_number * 2,
+            base_trend_number,
         )
+        
+        backtester.run_backtest()
 
-        # 运行 Plotter
-        plotter_app.run()
-
-        print("Plotter has ended. Continuing with post-Plotter operations...")
+        print("Backtest has ended. Continuing with post-Plotter operations...")
 
 
 if __name__ == "__main__":

@@ -28,7 +28,7 @@ def filter_trend_initial(trend_high, trend_low, data, config):
         trend_high = filter_by_trending_line(trend_high)
         trend_low = filter_by_trending_line(trend_low)
         
-    return trend_high, trend_low 
+    return trend_high, trend_low # 返回初始过滤后的趋势数据
 
 def filter_by_slope(trend, threshold=1):
     """Filter trends based on the absolute slope threshold."""
