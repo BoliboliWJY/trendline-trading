@@ -52,7 +52,7 @@ class Plotter:
 
         # 可视化参数
         self.visulize_mode = True  # 是否可视化
-        self.is_paused = False  # State to track pause/resume
+        self.is_paused = True  # State to track pause/resume
 
         # FPS 计数
         self.frame_count_fps = 0

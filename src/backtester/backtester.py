@@ -1,19 +1,11 @@
 import time
-import datetime
-import numpy as np
-import copy
-import sys
-from collections import OrderedDict
 from src.utils import profile_method
-
 # Import other dependencies from src as needed:
-from src.filter.filters import filter_trend, filter_trend_initial
-from src.trend_process import calculate_trend, initial_single_slope
 from src.trend_calculator.compute_initial_trends import compute_initial_trends
 
 
 class Backtester:
-    @profile_method
+    # @profile_method
     def __init__(
         self,
         data,
@@ -32,10 +24,10 @@ class Backtester:
 
         # 趋势管理
         # self.deleted_trends = {}
-        self.trend_high = [] # 完整的高趋势数据
-        self.trend_low = [] # 完整的低趋势数据
-        self.last_filtered_high = [] # 最后过滤的高趋势数据
-        self.last_filtered_low = [] # 最后过滤的低趋势数据
+        self.trend_high = []  # 完整的高趋势数据
+        self.trend_low = []  # 完整的低趋势数据
+        self.last_filtered_high = []  # 最后过滤的高趋势数据
+        self.last_filtered_low = []  # 最后过滤的低趋势数据
 
         # 可视化参数
 
@@ -45,8 +37,8 @@ class Backtester:
 
         self.backtest_count = 1  # 回测计数
 
-        self.initial_trend()  # 初始化趋势
-        # self.update_trend() # 更新趋势
+        # 初始化趋势，并保存返回的数据
+        self.initial_trend_data = self.initial_trend()
 
     def initial_trend(self):
         """
@@ -67,24 +59,42 @@ class Backtester:
         self.trend_high = trend_high
         self.trend_low = trend_low
 
-        self.last_filtered_high.append(
-            trend_high[-self.trend_config.get("delay") :][0]
-        )
-        self.last_filtered_low.append(
-            trend_low[-self.trend_config.get("delay") :][0]
+        delay = self.trend_config.get("delay")
+        self.last_filtered_high.append(list(trend_high[-delay]))
+        self.last_filtered_low.append(list(trend_low[-delay]))
+        
+        # 过滤趋势
+        self.last_filtered_high, self.last_filtered_low = self.filter_trend(
+            self.trend_high,
+            self.trend_low,
+            self.last_filtered_high,
+            self.last_filtered_low,
+            self.data,
+            self.trend_config,
         )
 
+        # 返回结构化的趋势数据 初始化趋势
+        return {
+            "trend_high": self.last_filtered_high[:-1],
+            "trend_low": self.last_filtered_low[:-1],
+        }
+
     def update_trend(self):
-        """更新一次趋势数据"""
+        """更新一次趋势数据，并返回更新后的数据; 如果数据结束则返回 False"""
         end_index = self.base_trend_number + self.backtest_count
         if end_index >= len(self.data):
             print("Reached end of data. Stopping the backtest.")
-            return False  # 如果数据结束，返回False
+            return False  # 如果数据结束，返回 False
 
-        # 更新当前数据
-        self.backtest_count += 1
-        self.current_data = self.data[self.base_trend_number: self.base_trend_number + self.backtest_count]
-        self.current_type = self.type_data[self.base_trend_number: self.base_trend_number + self.backtest_count]
+        # TODO: 需要确定这里的current_data和current_type是否需要更新
+        # # 更新当前数据
+        # self.backtest_count += 1
+        # self.current_data = self.data[
+        #     self.base_trend_number : self.base_trend_number + self.backtest_count
+        # ]
+        # self.current_type = self.type_data[
+        #     self.base_trend_number : self.base_trend_number + self.backtest_count
+        # ]
 
         # 更新趋势数据
         try:
@@ -93,14 +103,13 @@ class Backtester:
             )
         except StopIteration:
             self.trend_high, self.trend_low, deleted_high, deleted_low = [], [], [], []
-            
-        # 更新被删除的趋势
+
+        # 处理被删除的趋势
         for idx, item_to_delete in deleted_high:
             if idx < len(self.last_filtered_high):
                 try:
                     self.last_filtered_high[idx].remove(item_to_delete)
                 except ValueError:
-                    # 如果在对应的子列表中没有找到此项，则忽略。
                     pass
 
         for idx, item_to_delete in deleted_low:
@@ -108,13 +117,12 @@ class Backtester:
                 try:
                     self.last_filtered_low[idx].remove(item_to_delete)
                 except ValueError:
-                    # 如果在对应的子列表中没有找到此项，则忽略。
                     pass
 
         # 添加新的趋势
         delay = self.trend_config.get("delay")
-        self.last_filtered_high.append(self.trend_high[-delay:][0])
-        self.last_filtered_low.append(self.trend_low[-delay:][0])
+        self.last_filtered_high.append(list(self.trend_high[-delay]))
+        self.last_filtered_low.append(list(self.trend_low[-delay]))
 
         # 过滤趋势
         self.last_filtered_high, self.last_filtered_low = self.filter_trend(
@@ -126,11 +134,22 @@ class Backtester:
             self.trend_config,
         )
 
-        return True  # 如果数据未结束，返回True
+        updated_trend = {
+            "trend_high": self.last_filtered_high[:-1],
+            "trend_low": self.last_filtered_low[:-1],
+        }
 
-    @profile_method
+        self.backtest_count += 1
+        
+        return updated_trend  # 返回更新后的趋势数据
+
+    # @profile_method
     def run_backtest(self, delay=0):
-        """运行回测"""
-        while self.update_trend():
+        """运行回测，同时可通过返回的趋势数据进行可视化"""
+        while True:
+            result = self.update_trend()
+            if result is False:
+                break
             if delay > 0:
                 time.sleep(delay)
+            yield result

@@ -52,7 +52,7 @@ class Plotter:
 
         # 可视化参数
         self.visulize_mode = True  # 是否可视化
-        self.is_paused = False  # State to track pause/resume
+        self.is_paused = True  # State to track pause/resume
 
         # FPS 计数
         self.frame_count_fps = 0
@@ -182,15 +182,17 @@ class Plotter:
         return cache_data
 
     def trend_to_line(self, trend_high, trend_low):
-        N_high = len(trend_high)
-        N_low = len(trend_low)
+        self.trend_high = trend_high
+        self.trend_low = trend_low
+        N_high = len(self.trend_high)
+        N_low = len(self.trend_low)
         data = self.data
         delta = (data[1, 0] - data[0, 0]) * 120
 
         # Process trend_high
         slopes_high, js_high, is_high = [], [], []
         for i in range(1, N_high):
-            for slope, j in trend_high[i]:
+            for slope, j in self.trend_high[i]:
                 if 0 <= j < len(data):
                     slopes_high.append(slope)
                     js_high.append(j)
@@ -215,7 +217,7 @@ class Plotter:
         # Process trend_low
         slopes_low, js_low, is_low = [], [], []
         for i in range(1, N_low):
-            for slope, j in trend_low[i]:
+            for slope, j in self.trend_low[i]:
                 if 0 <= j < len(data):
                     slopes_low.append(slope)
                     js_low.append(j)
@@ -239,12 +241,14 @@ class Plotter:
         return x_high, y_high, x_low, y_low
 
     def horizontal_line(self, trend_high, trend_low):
-        N_high = len(trend_high)
-        N_low = len(trend_low)
+        self.trend_high = trend_high
+        self.trend_low = trend_low
+        N_high = len(self.trend_high)
+        N_low = len(self.trend_low)
         delta = (self.data[1, 0] - self.data[0, 0]) * 20
         slopes_high, js_high, is_high = [], [], []
         for i in range(1, N_high):
-            for slope, j in trend_high[i]:
+            for slope, j in self.trend_high[i]:
                 if 0 <= j < len(self.data) and slope <= 0:
                     slopes_high.append(slope)
                     js_high.append(j)
@@ -267,7 +271,7 @@ class Plotter:
 
         slopes_low, js_low, is_low = [], [], []
         for i in range(1, N_low):
-            for slope, j in trend_low[i]:
+            for slope, j in self.trend_low[i]:
                 if 0 <= j < len(self.data) and slope >= 0:
                     slopes_low.append(slope)
                     js_low.append(j)
@@ -361,8 +365,8 @@ class Plotter:
 
     def organize_data(self):
         """Merge update data for manual and auto operation."""
-        self.current_data = self.data[self.base_trend_number + self.frame_count: self.base_trend_number + self.visual_number + self.frame_count]
-        self.current_type = self.type_data[self.base_trend_number + self.frame_count: self.base_trend_number + self.visual_number + self.frame_count]
+        # self.current_data = self.data[self.base_trend_number + self.frame_count: self.base_trend_number + self.visual_number + self.frame_count]
+        # self.current_type = self.type_data[self.base_trend_number + self.frame_count: self.base_trend_number + self.visual_number + self.frame_count]
         try:
             trend_high, trend_low, deleted_high, deleted_low = next(self.trend_generator)
         except StopIteration:

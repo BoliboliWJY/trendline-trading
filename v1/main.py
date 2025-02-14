@@ -16,6 +16,7 @@ from src.latest_data.latest_klines import get_latest_klines
 
 
 # %%
+
 def main():
     # 记录获取历史数据的开始时间
     start_time = time.perf_counter()

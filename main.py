@@ -15,6 +15,8 @@ from src.latest_data.new_price import get_current_price
 from src.latest_data.latest_klines import get_latest_klines
 from src.backtester.backtester import Backtester
 from src.utils import profile_method
+from src.plotter.plotter import Plotter
+
 
 # %%
 def main():
@@ -78,9 +80,7 @@ def main():
             print("No data point found with data[:,0] > aim_time")
 
         visual_number = basic_config["visual_number"]
-        base_trend_number = (
-            index - visual_number
-        )  # 或者使用固定值，比如： base_trend_number = 10
+        base_trend_number = index  # 或者使用固定值，比如： base_trend_number = 10
 
         # 初始化趋势数据生成器
         trend_generator = backtest_calculate_trend_generator(
@@ -97,9 +97,17 @@ def main():
             trend_config,
             base_trend_number,
         )
-        
-        backtester.run_backtest()
 
+        initial_trend_data = backtester.initial_trend_data
+        delay = trend_config.get("delay")
+        plotter = Plotter(data, type_data, initial_trend_data, visual_number, delay)
+
+        # backtest_result = backtester.run_backtest()
+
+        for current_trend in backtester.run_backtest():
+            plotter.update_plot(current_trend)
+            plotter.run()
+            # time.sleep(0.5)
         print("Backtest has ended. Continuing with post-Plotter operations...")
 
 

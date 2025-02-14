@@ -1,8 +1,8 @@
 key: 'uiY3WGKVNEaCkntmyikLCALO9O63PBAYcVDwLw0Xu66AgcrEBXab0UANMbWZOsj4'
 secret: 'O7zn1HEFTr0e9msT1m52Nu6utZtIkmicRsbUtpSJSdVJrTlLs2NIVLLhiwALXKez'
 coin_type: 'BTCUSDT'
-aim_time: '2024-11-5  10:00:00'
-total_length: 60000
+aim_time: '2025-2-5  19:30:00'
+total_length: 10000
 interval: '3m'
 
 visual_number: 200
@@ -12,7 +12,7 @@ run_type: 0
 
 # 趋势配置参数
 trend_config:
-  delay: 4                    # 生成延迟
+  delay: 1                    # 生成延迟
   interval: '3m'              # 注意此处与顶层 interval 保持一致，可在代码中转换成毫秒
   filter_slope: false         # 斜率大小限制: False 表示不过滤
   slope_threshold: 0.0001       # 最大斜率阈值

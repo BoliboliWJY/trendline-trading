@@ -20,6 +20,7 @@ def backtest_calculate_trend_generator(data, initial_single_slope, calculate_tre
         initial_single_slope(backtest_data, trend=trend_high, idx=idx_high)
         initial_single_slope(backtest_data, trend=trend_low, idx=idx_low)
         
+        # 原始趋势中因更新而被删除的趋势，last_filtered_xx中会包含这些需要被趋势
         deleted_high = []
         deleted_low = []
         
