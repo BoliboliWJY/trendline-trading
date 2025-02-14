@@ -79,6 +79,7 @@ def main():
         else:
             print("No data point found with data[:,0] > aim_time")
 
+        visualize_mode = basic_config["visualize_mode"]
         visual_number = basic_config["visual_number"]
         base_trend_number = index  # 或者使用固定值，比如： base_trend_number = 10
 
@@ -100,16 +101,38 @@ def main():
 
         initial_trend_data = backtester.initial_trend_data
         delay = trend_config.get("delay")
-        plotter = Plotter(data, type_data, initial_trend_data, visual_number, delay)
+        cache_len = 1000  # 缓存长度
 
-        # backtest_result = backtester.run_backtest()
+        if visualize_mode: # 可视化模式切换
+            plotter = Plotter(
+                data, type_data, initial_trend_data, visual_number, delay, cache_len
+            )
+            for current_trend in backtester.run_backtest():
+                while plotter.paused:
+                    plotter.run()
+                    time.sleep(0.05)
 
-        for current_trend in backtester.run_backtest():
-            plotter.update_plot(current_trend)
-            plotter.run()
-            # time.sleep(0.5)
-        print("Backtest has ended. Continuing with post-Plotter operations...")
-
+                plotter.update_plot(current_trend)
+                plotter.run()
+                # time.sleep(0.5)
+            print(
+                "Backtest has ended with visualization. Continuing with post-Plotter operations..."
+            )
+        else:
+            start_time = time.perf_counter()
+            # 无可视化模式下的处理逻辑，示例中简单打印或记录趋势数据
+            a = 1
+            for current_trend in backtester.run_backtest():
+                # 在这里你可以根据需要对 current_trend 进行处理或保存，而非更新图形
+                # print("Processing trend:", current_trend)
+                a += 1
+            print(a)
+            print(
+                "Backtest has ended without visualization. Continuing with post-Backtester operations..."
+            )
+        end_time = time.perf_counter()
+        elapsed_time = end_time - start_time
+        print(f"回测耗时: {elapsed_time:.6f} 秒")
 
 if __name__ == "__main__":
     main()

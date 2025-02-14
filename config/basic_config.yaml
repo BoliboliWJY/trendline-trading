@@ -1,10 +1,11 @@
 key: 'uiY3WGKVNEaCkntmyikLCALO9O63PBAYcVDwLw0Xu66AgcrEBXab0UANMbWZOsj4'
 secret: 'O7zn1HEFTr0e9msT1m52Nu6utZtIkmicRsbUtpSJSdVJrTlLs2NIVLLhiwALXKez'
 coin_type: 'BTCUSDT'
-aim_time: '2025-2-5  19:30:00'
-total_length: 10000
+aim_time: '2024-11-15  19:30:00'
+total_length: 60000
 interval: '3m'
 
+visualize_mode: False
 visual_number: 200
 
 # 设定运行模式:1为实测，0为回测

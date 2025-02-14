@@ -5,6 +5,8 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 import pyqtgraph as pg
 from src.plotter.plot_ui import PlotWindow
 
+from collections import deque
+
 
 class Plotter:
     def __init__(
@@ -14,6 +16,7 @@ class Plotter:
         initial_trend_data: dict,
         visual_number: int,
         delay: int,
+        cache_len: int,
     ):
         self.data = data
         self.type_data = type_data
@@ -42,11 +45,20 @@ class Plotter:
         self.set_plot_ranges(self.current_data)
         self.plot.getViewBox().setBackgroundColor("k")
 
-        self.initial_plot()
+        # 控制器
+        self.paused = False
+        from src.plotter.plot_controller import PlotController
 
-        #
+        self.controller = PlotController(self)
+
+        self.plot_cache = deque(maxlen=cache_len)
+        self.current_snapshot_index = -1  # 记录当前缓存索引
+
+        # 计算FPS
         self.fps_last_time = time.time()
         self.fps_count = 0
+
+        self.initial_plot()
 
     def set_plot_ranges(self, data_slice):
         """
@@ -152,6 +164,10 @@ class Plotter:
             + self.visual_number
             + self.delay
         ]
+        # 检查
+        if self.current_data.shape[0] < self.visual_number + self.delay:
+            print("Reached the end of the data. Auto_apdate is paused.")
+            return
         self.current_type = self.type_data[
             self.start_index
             + self.frame_count : self.start_index
@@ -177,10 +193,15 @@ class Plotter:
             self.fps_count = 0
 
     def plot_in_one(self):
+        # 缓存当前绘图数据
+        snapshot = {}
+
         # 更新趋势线和水平线
         x_trend_high, y_trend_high, x_trend_low, y_trend_low = self.trend_to_line()
         self.safe_update_plot_line("trend_high", x_trend_high, y_trend_high)
         self.safe_update_plot_line("trend_low", x_trend_low, y_trend_low)
+        snapshot["trend_high"] = (x_trend_high, y_trend_high)
+        snapshot["trend_low"] = (x_trend_low, y_trend_low)
 
         # 更新其它图形（如K线、柱状图等，根据plot_configs配置）
         for config in self.plot_configs:
@@ -191,6 +212,34 @@ class Plotter:
             x_data = pairs[:, [0, 2]].flatten()
             y_data = pairs[:, [1, 3]].flatten()
             self.safe_update_plot_line(config["name"], x_data, y_data)
+            snapshot[config["name"]] = (x_data, y_data)
+
+        # 同时缓存当前的坐标轴范围
+        snapshot["axis_range"] = {
+            "x": self.plot.viewRange()[0],
+            "y": self.plot.viewRange()[1],
+        }
+
+        # 更新缓存
+        self.plot_cache.append(snapshot)
+        if not self.paused:
+            self.current_snapshot_index = len(self.plot_cache) - 1
+
+    def refresh_frame(self):
+        if self.plot_cache and 0 <= self.current_snapshot_index < len(self.plot_cache):
+            snapshot = self.plot_cache[self.current_snapshot_index]
+            self.win.plot_widget.setUpdatesEnabled(False) # 禁用自动更新
+            for key, (x_data, y_data) in snapshot.items():
+                if key != "axis_range":  # 跳过坐标轴范围
+                    self.safe_update_plot_line(key, x_data, y_data)
+            # 恢复坐标轴范围
+            if "axis_range" in snapshot:
+                axis = snapshot["axis_range"]
+                self.plot.setXRange(*axis["x"])
+                self.plot.setYRange(*axis["y"])
+            self.win.plot_widget.setUpdatesEnabled(True) # 恢复自动更新
+        else:
+            print("No snapshot available.")
 
     def safe_update_plot_line(self, plot_name, x_data, y_data):
         if len(x_data) > 0 and len(y_data) > 0:

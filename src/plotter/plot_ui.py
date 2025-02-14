@@ -2,16 +2,18 @@ import datetime
 from pyqtgraph.Qt import QtCore, QtWidgets
 import pyqtgraph as pg
 
+
 class TimeAxisItem(pg.AxisItem):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        
+
     def tickStrings(self, values, scale, spacing):
         # 将时间戳转换为日期时间字符串
         return [
             datetime.datetime.fromtimestamp(value / 1000).strftime("%Y-%m-%d %H:%M:%S")
             for value in values
         ]
+
 
 class PlotWindow(QtWidgets.QWidget):
     def __init__(self, *args, **kwargs):
@@ -20,7 +22,8 @@ class PlotWindow(QtWidgets.QWidget):
         self.plotter = None  # Will be set by Plotter
         self.setWindowTitle("Data Plotter with FPS")
         self.resize(1200, 800)
-        self.setStyleSheet("""
+        self.setStyleSheet(
+            """
             QWidget {
                 background-color: black;
             }
@@ -38,24 +41,25 @@ class PlotWindow(QtWidgets.QWidget):
             QPushButton:pressed {
                 background-color: #777777;
             }
-        """)
+        """
+        )
         # Create a vertical layout
         layout = QtWidgets.QVBoxLayout()
         self.setLayout(layout)
 
-        time_axis = TimeAxisItem(orientation='bottom')
+        time_axis = TimeAxisItem(orientation="bottom")
         # Create the pyqtgraph PlotWidget
-        self.plot_widget = pg.PlotWidget(axisItems={'bottom': time_axis})
+        self.plot_widget = pg.PlotWidget(axisItems={"bottom": time_axis})
         layout.addWidget(self.plot_widget)
 
         # Horizontal layout for buttons
         button_layout = QtWidgets.QHBoxLayout()
         layout.addLayout(button_layout)
-        
+
         self.prev_button = QtWidgets.QPushButton("Previous")
         button_layout.addWidget(self.prev_button)
         self.prev_button.clicked.connect(self.on_prev_button)
-        
+
         self.next_button = QtWidgets.QPushButton("Next")
         button_layout.addWidget(self.next_button)
         self.next_button.clicked.connect(self.on_next_button)
@@ -67,25 +71,25 @@ class PlotWindow(QtWidgets.QWidget):
 
     def on_prev_button(self):
         if self.plotter:
-            self.plotter.show_previous_frame()             
+            self.plotter.controller.show_previous_frame()
 
     def on_next_button(self):
         if self.plotter:
-            self.plotter.show_next_frame()         
+            self.plotter.controller.show_next_frame()
 
     def on_pause_button(self):
         if self.plotter:
-            self.plotter.toggle_pause()
+            self.plotter.controller.toggle_pause()
 
     def keyPressEvent(self, event):
         if event.key() == QtCore.Qt.Key_Space:
             if self.plotter:
-                self.plotter.toggle_pause()
+                self.plotter.controller.toggle_pause()
         elif event.key() == QtCore.Qt.Key_Left:
             if self.plotter:
-                self.plotter.show_previous_frame()
+                self.plotter.controller.show_previous_frame()
         elif event.key() == QtCore.Qt.Key_Right:
             if self.plotter:
-                self.plotter.show_next_frame()
+                self.plotter.controller.show_next_frame()
         else:
-            super().keyPressEvent(event) 
+            super().keyPressEvent(event)
