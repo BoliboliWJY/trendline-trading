@@ -7,8 +7,8 @@ from binance.spot import Spot as Client
 # from binance import Client
 from src.config_manager import load_basic_config
 from src.data_loader import load_or_fetch_data
-from src.trend_generator import backtest_calculate_trend_generator
-from src.trend_process import initial_single_slope, calculate_trend
+from src.trend_calculator.trend_generator import backtest_calculate_trend_generator
+from src.trend_calculator.trend_process import initial_single_slope, calculate_trend
 from src.filter.filters import filter_trend
 from src.time_number import time_number
 from src.latest_data.new_price import get_current_price
@@ -19,10 +19,11 @@ from src.plotter.plotter import Plotter
 
 
 # %%
+
 def main():
     # 记录获取历史数据的开始时间
     start_time = time.perf_counter()
-
+    
     # 从配置文件中加载基本参数
     basic_config = load_basic_config("config/basic_config.yaml")
 

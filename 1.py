@@ -71,7 +71,7 @@ import io
 
 from src.filter.filters import filter_trend, filter_trend_initial
 from src.trading_strategy import TradingStrategy
-from src.trend_process import calculate_trend, initial_single_slope
+from src.trend_calculator.trend_process import calculate_trend, initial_single_slope
 #%%
 ###############################################
 # 辅助函数与装饰器定义
