@@ -1,6 +1,7 @@
 import cProfile, pstats, io
 import line_profiler
 
+# 使用line_profiler进行性能分析
 
 def profile_method(func):
     # how to use: @profile_method before the function you want to profile
