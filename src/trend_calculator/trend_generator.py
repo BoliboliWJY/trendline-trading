@@ -1,5 +1,6 @@
 from sortedcontainers import SortedList
 
+
 def backtest_calculate_trend_generator(data, initial_single_slope, calculate_trend):
     """
     回测用趋势数据生成器函数

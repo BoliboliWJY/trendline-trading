@@ -19,8 +19,6 @@ from src.plotter.plotter import Plotter
 
 
 # %%
-
-
 def main():
     # 记录获取历史数据的开始时间
     start_time = time.perf_counter()
