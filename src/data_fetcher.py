@@ -47,8 +47,8 @@ def get_data_in_batches(client,coin_type,interval,total_length,current_time,limi
       
     # 原始数据排列顺序为：[0]开盘时间、[1]开盘价、[2]最高价、[3]最低价、[4]收盘价(当前K线未结束的即为最新价)、[5]成交量、[6]收盘时间、[7]成交额、[8]成交笔数、[9]主动买入成交量、[10]主动买入成交额、[11]请忽略该参数
     data[:,0] = (data[:,0] + data[:,6]) / 2 #取时间中值,减小误差
-    data = data[:, [0, 2, 3, 1, 4, 6]].astype(float)#Ave_ime,High,Low,Open,Close,Close_time
-    
+    # data = data[:, [0, 2, 3, 1, 4, 6]].astype(float)#Ave_ime,High,Low,Open,Close,Close_time
+    data = data[:, [0, 2, 3, 1, 4, 5, 7, 8, 9, 10]].astype(float)# 0:时间,1:最高价,2:最低价,3:开盘价,4:收盘价,5:成交量,6:成交额,7:成交笔数,8:主动买入成交量,9:主动买入成交额
     # if(interval == '1s'):
     # data = data_compression(data)
     # data = data[:,[0,1]]

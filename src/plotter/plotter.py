@@ -46,7 +46,7 @@ class Plotter:
         self.plot.getViewBox().setBackgroundColor("k")
 
         # 控制器
-        self.paused = False
+        self.paused = True  # 是否暂停
         from src.plotter.plot_controller import PlotController
 
         self.controller = PlotController(self)

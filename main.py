@@ -20,10 +20,11 @@ from src.plotter.plotter import Plotter
 
 # %%
 
+
 def main():
     # 记录获取历史数据的开始时间
     start_time = time.perf_counter()
-    
+
     # 从配置文件中加载基本参数
     basic_config = load_basic_config("config/basic_config.yaml")
 
@@ -59,7 +60,17 @@ def main():
 
     else:
         # 回测模式
-        # 获取或加载历史数据
+        # 加载起始时间、结束时间、计算时间
+        # backtest_start_time = basic_config["backtest_config"]["backtest_start_time"]
+        # backtest_end_time = basic_config["backtest_config"]["backtest_end_time"]
+        # backtest_calculate_time = basic_config["backtest_config"]["backtest_calculate_time"]
+        
+        # backtest_start_time = datetime.datetime.strptime(backtest_start_time, "%Y-%m-%d %H:%M:%S").timestamp() * 1000
+        # backtest_end_time = datetime.datetime.strptime(backtest_end_time, "%Y-%m-%d %H:%M:%S").timestamp() * 1000
+        # backtest_calculate_time = datetime.datetime.strptime(backtest_calculate_time, "%Y-%m-%d %H:%M:%S").timestamp() * 1000
+        
+        # data, type_data = load_or_fetch_data(client, coin_type, interval, backtest_start_time, backtest_end_time, backtest_calculate_time)
+        
         data, type_data = load_or_fetch_data(client, coin_type, interval, total_length)
 
         end_time = time.perf_counter()
@@ -67,6 +78,7 @@ def main():
         print(f"获取数据耗时: {elapsed_time:.6f} 秒")
 
         # 将目标时间字符串转换为毫秒时间戳
+        # aim_time_str = basic_config["backtest_config"]["backtest_aim_time"]
         aim_time = (
             datetime.datetime.strptime(aim_time_str, "%Y-%m-%d %H:%M:%S").timestamp()
             * 1000
@@ -101,10 +113,11 @@ def main():
         )
 
         initial_trend_data = backtester.initial_trend_data
-        delay = trend_config.get("delay")
-        cache_len = 1000  # 缓存长度
+        
 
-        if visualize_mode: # 可视化模式切换
+        if visualize_mode:  # 可视化模式切换
+            delay = trend_config.get("delay")
+            cache_len = 1000  # 缓存长度
             plotter = Plotter(
                 data, type_data, initial_trend_data, visual_number, delay, cache_len
             )
@@ -134,6 +147,7 @@ def main():
         end_time = time.perf_counter()
         elapsed_time = end_time - start_time
         print(f"回测耗时: {elapsed_time:.6f} 秒")
+
 
 if __name__ == "__main__":
     main()
