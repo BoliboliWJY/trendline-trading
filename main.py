@@ -29,6 +29,9 @@ from src.get_data.data_getter import data_getter
 # 回测tick价格管理器
 from src.get_data.backtest_tick_price_getter import BacktestTickPriceManager
 
+# 交易员
+from src.trader.trader import Trader
+
 
 # %%
 def main():
@@ -158,9 +161,11 @@ def main():
         current_trend_high = initial_trend_data["trend_high"]
         current_trend_low = initial_trend_data["trend_low"]
 
+        backtest_trader = Trader()
+
         # 6. 根据配置决定是否可视化
         if visualize_mode:
-            delay = trend_config.get("delay")
+            delay = trend_config.get("delay") if trend_config.get("enable_filter", True) else 1
             cache_len = 1000  # 缓存长度
             plotter = Plotter(
                 data, type_data, initial_trend_data, visual_number, delay, cache_len
@@ -184,12 +189,17 @@ def main():
                 last_trend_high = current_trend_high
                 last_trend_low = current_trend_low
                 if current_trend["removing_item"] == True:  # 如果趋势被过滤
+                    # 载入趋势数据
+                    backtest_trader.get_trend_data(
+                        data, base_trend_number, last_trend_high, last_trend_low
+                    )
                     lower_bound = data[base_trend_number - 1, 6]
                     upper_bound = lower_bound + trend_config["interval"]
                     for p in backtest_tick_price.yield_prices_from_filtered_data(
                         lower_bound, upper_bound
                     ):
-                        print(p)
+                        pass
+                        # print(p)
 
                     filter_count += 1
                 else:  # 如果趋势未被过滤，则更新当前趋势

@@ -22,7 +22,6 @@ class Backtester:
         self.filter_trend = filter_trend
         self.trend_config = trend_config
         self.base_trend_number = base_trend_number  # 前置趋势数量
-        self.delay = self.trend_config.get("delay")
 
         # 趋势管理
         # self.deleted_trends = {}
@@ -64,9 +63,6 @@ class Backtester:
         # self.trend_high = trend_high
         # self.trend_low = trend_low
 
-        self.last_filtered_high.append(list(self.trend_high[-self.delay]))
-        self.last_filtered_low.append(list(self.trend_low[-self.delay]))
-
         # 过滤趋势
         self.last_filtered_high, self.last_filtered_low = self.filter_trend(
             self.trend_high,
@@ -107,9 +103,7 @@ class Backtester:
 
         return_trend_high = self.last_filtered_high
         return_trend_low = self.last_filtered_low
-        # 添加新的趋势
-        self.last_filtered_high.append(list(self.trend_high[-self.delay]))
-        self.last_filtered_low.append(list(self.trend_low[-self.delay]))
+        
 
         # 过滤趋势
         self.last_filtered_high, self.last_filtered_low = self.filter_trend(
@@ -126,6 +120,12 @@ class Backtester:
             "trend_low": return_trend_low,
             "removing_item": removing_item,
         }
+        # 未过滤的数据
+        # updated_trend = {
+        #     "trend_high": self.trend_high,
+        #     "trend_low": self.trend_low,
+        #     "removing_item": removing_item,
+        # }
 
         self.backtest_count += 1
 
