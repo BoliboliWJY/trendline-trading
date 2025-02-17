@@ -50,6 +50,6 @@ def get_data_in_batches(client, coin_type, interval, total_length, start_time, l
 
     # 整理数据排列顺序
     # 原始数据排列顺序为：[0]开盘时间、[1]开盘价、[2]最高价、[3]最低价、[4]收盘价、[5]成交量、[6]收盘时间、[7]成交额、[8]成交笔数、[9]主动买入成交量、[10]主动买入成交额、[11]请忽略该参数
-    data[:, 0] = (data[:, 0] + data[:, 6]) / 2  # 取两个时间的中间值，减小误差
-    data = data[:, [0, 2, 3, 1, 4, 5, 7, 8, 9, 10]].astype(float)
+    data[:, 11] = (data[:, 0] + data[:, 6]) / 2  # 取两个时间的中间值，减小误差
+    data = data[:, [11, 2, 3, 1, 4, 0, 6, 5, 7, 8, 9, 10]].astype(float)
     return data, type_data.reshape(-1)

@@ -26,6 +26,9 @@ from src.plotter.plotter import Plotter
 
 from src.get_data.data_getter import data_getter
 
+# 回测tick价格管理器
+from src.get_data.backtest_tick_price_getter import BacktestTickPriceManager
+
 
 # %%
 def main():
@@ -43,8 +46,8 @@ def main():
     key = basic_config["key"]
     secret = basic_config["secret"]
     coin_type = basic_config["coin_type"]
-    aim_time_str = basic_config["aim_time"]
-    total_length = basic_config["total_length"]
+    # aim_time_str = basic_config["aim_time"]
+    # total_length = basic_config["total_length"]
     interval = basic_config["interval"]
     run_type = basic_config["run_type"]  # True: 实盘；False: 回测
 
@@ -87,17 +90,26 @@ def main():
         backtest_end_time_str = backtest_config["backtest_end_time"]
         backtest_calculate_time_str = backtest_config["backtest_calculate_time"]
 
+        # 获取历史tick数据（回测时段的数据）
+        backtest_tick_price = BacktestTickPriceManager(
+            coin_type, backtest_calculate_time_str, backtest_end_time_str
+        )
+
         backtest_start_time = int(
-            datetime.datetime.strptime(backtest_start_time_str, "%Y-%m-%d").timestamp()
+            datetime.datetime.strptime(backtest_start_time_str, "%Y-%m-%d")
+            .replace(tzinfo=datetime.timezone.utc)
+            .timestamp()
         )
         backtest_end_time = int(
-            datetime.datetime.strptime(backtest_end_time_str, "%Y-%m-%d").timestamp()
+            datetime.datetime.strptime(backtest_end_time_str, "%Y-%m-%d")
+            .replace(tzinfo=datetime.timezone.utc)
+            .timestamp()
         )
 
         # 2. 计算数据长度（这里将时间间隔转化为秒数进行整除）
         length = int((backtest_end_time - backtest_start_time) // time_number(interval))
 
-        # 3. 获取历史数据（回测时段的数据）
+        # 3. 获取历史k线数据（回测时段的数据）
         data, type_data = data_getter(
             client, coin_type, interval, length, backtest_start_time, backtest_end_time
         )
@@ -108,13 +120,14 @@ def main():
         # 4. 计算回测起始计算点的索引（转换到毫秒单位后查找对应数据位置）
         backtest_calculate_time = (
             int(
-                datetime.datetime.strptime(
-                    backtest_calculate_time_str, "%Y-%m-%d"
-                ).timestamp()
+                datetime.datetime.strptime(backtest_calculate_time_str, "%Y-%m-%d")
+                .replace(tzinfo=datetime.timezone.utc)
+                .timestamp()
             )
             * 1000
         )
-        index = np.searchsorted(data[:, 0], backtest_calculate_time, side="left")
+        index = np.searchsorted(data[:, 5], backtest_calculate_time, side="left")
+        index = index - 1
         if index < len(data):
             print(
                 f"第一个满足 data[:,0] > aim_time 的索引是 {index}, 时间戳为 {data[index, 0]}"
@@ -142,6 +155,8 @@ def main():
             base_trend_number,
         )
         initial_trend_data = backtester.initial_trend_data
+        current_trend_high = initial_trend_data["trend_high"]
+        current_trend_low = initial_trend_data["trend_low"]
 
         # 6. 根据配置决定是否可视化
         if visualize_mode:
@@ -159,12 +174,33 @@ def main():
                 plotter.run()
             print("回测可视化已结束，继续后续操作...")
         else:
-            
+
             trend_count = 1
+            filter_count = 0
+
             for current_trend in backtester.run_backtest():
-                # 此处可添加处理 logic，目前仅计数
+                # 保存上一次的趋势
+
+                last_trend_high = current_trend_high
+                last_trend_low = current_trend_low
+                if current_trend["removing_item"] == True:  # 如果趋势被过滤
+                    lower_bound = data[base_trend_number - 1, 6]
+                    upper_bound = lower_bound + trend_config["interval"]
+                    for p in backtest_tick_price.yield_prices_from_filtered_data(
+                        lower_bound, upper_bound
+                    ):
+                        print(p)
+
+                    filter_count += 1
+                else:  # 如果趋势未被过滤，则更新当前趋势
+                    current_trend_high = current_trend["trend_high"]
+                    current_trend_low = current_trend["trend_low"]
+
                 trend_count += 1
+                base_trend_number += 1
             print("处理的趋势数量:", trend_count)
+            print("通过过滤器处理的趋势数量:", filter_count)
+            print("通过过滤器处理的趋势比例:", filter_count / trend_count)
             print("回测无可视化模式下已结束，继续后续操作...")
 
         backtest_elapsed_time = time.perf_counter() - start_time

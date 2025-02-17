@@ -1,8 +1,8 @@
 key: 'uiY3WGKVNEaCkntmyikLCALO9O63PBAYcVDwLw0Xu66AgcrEBXab0UANMbWZOsj4'
 secret: 'O7zn1HEFTr0e9msT1m52Nu6utZtIkmicRsbUtpSJSdVJrTlLs2NIVLLhiwALXKez'
 coin_type: 'BTCUSDT'
-aim_time: '2025-2-10  19:30:00'
-total_length: 10000
+# aim_time: '2025-2-10  19:30:00'
+# total_length: 10000
 # aim_time: '2024-11-1  19:30:00'
 # total_length: 60000
 # aim_time: '2024-8-1  19:30:00'
@@ -10,7 +10,7 @@ total_length: 10000
 interval: '3m'
 
 visualize_mode: False
-visual_number: 200
+visual_number: 500
 
 # 设定运行模式:1为实测，0为回测
 run_type: 0
@@ -35,10 +35,10 @@ trend_config:
 
 # 交易策略配置参数
 trading_config:
-  fee: 0.002
-  stop_loss: 0.0005
-  take_profit: 0.001
-  high_threshold: 0.0002
-  low_threshold: 0.0002
-  number: 1
-  reverse_percent: 0.02
+  fee: 0.002 # 手续费
+  stop_loss: 0.0005 # 止损
+  take_profit: 0.001 # 止盈
+  high_threshold: 0.0002 # 高趋势线对应价格与当前价格差距
+  low_threshold: 0.0002 # 低趋势线对应价格与当前价格差距
+  number: 1 # 小于阈值的趋势线数量
+  reverse_percent: 0.02 # 潜在利润
