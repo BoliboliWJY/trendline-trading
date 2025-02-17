@@ -69,6 +69,16 @@ class BacktestTickPriceManager:
         self.combined_df = pl.concat(self.dfs, rechunk=True)
         return self.combined_df
 
+    def yield_prices_from_filtered_data(self, lower_bound: int, upper_bound: int):
+        """
+        调用 filter_prices_sorted_optimized 获取数据子表后，
+        逐个 yield 子表中 price 列的值。
+        """
+        filtered_df = self.filter_prices_sorted_optimized(lower_bound, upper_bound)
+        # 假设子表中存在 "price" 这一列
+        for price in filtered_df["price"]:
+            yield price
+
     def filter_prices_sorted_optimized(self, lower_bound: int, upper_bound: int):
         """
         利用 Polars 内置的二分查找（search_sorted）来定位时间范围，
@@ -87,13 +97,3 @@ class BacktestTickPriceManager:
         # slice 方法的第二个参数表示切片长度
         filtered_df = self.combined_df.slice(start_idx, end_idx - start_idx)
         return filtered_df
-
-    def yield_prices_from_filtered_data(self, lower_bound: int, upper_bound: int):
-        """
-        调用 filter_prices_sorted_optimized 获取数据子表后，
-        逐个 yield 子表中 price 列的值。
-        """
-        filtered_df = self.filter_prices_sorted_optimized(lower_bound, upper_bound)
-        # 假设子表中存在 "price" 这一列
-        for price in filtered_df["price"]:
-            yield price

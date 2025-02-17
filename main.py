@@ -165,7 +165,11 @@ def main():
 
         # 6. 根据配置决定是否可视化
         if visualize_mode:
-            delay = trend_config.get("delay") if trend_config.get("enable_filter", True) else 1
+            delay = (
+                trend_config.get("delay")
+                if trend_config.get("enable_filter", True)
+                else 1
+            )
             cache_len = 1000  # 缓存长度
             plotter = Plotter(
                 data, type_data, initial_trend_data, visual_number, delay, cache_len
@@ -190,16 +194,24 @@ def main():
                 last_trend_low = current_trend_low
                 if current_trend["removing_item"] == True:  # 如果趋势被过滤
                     # 载入趋势数据
+                    print(base_trend_number)
                     backtest_trader.get_trend_data(
                         data, base_trend_number, last_trend_high, last_trend_low
                     )
                     lower_bound = data[base_trend_number - 1, 6]
                     upper_bound = lower_bound + trend_config["interval"]
-                    for p in backtest_tick_price.yield_prices_from_filtered_data(
+                    for (
+                        tick_price
+                    ) in backtest_tick_price.yield_prices_from_filtered_data(
                         lower_bound, upper_bound
-                    ):
-                        pass
-                        # print(p)
+                    ):  # TODO 时间应该是+8，而不是+0，记得修改
+                        signals = backtest_trader.evaluate_trade_signal(
+                            tick_price, trading_config
+                        )
+                        if signals.get("high_bounce"):
+                            print("高趋势反弹信号")
+                        if signals.get("low_bounce"):
+                            print("低趋势反弹信号")
 
                     filter_count += 1
                 else:  # 如果趋势未被过滤，则更新当前趋势

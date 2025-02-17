@@ -9,8 +9,8 @@ coin_type: 'BTCUSDT'
 # total_length: 100000
 interval: '3m'
 
-visualize_mode: True
-visual_number: 5000
+visualize_mode: False
+visual_number: 200
 
 # 设定运行模式:1为实测，0为回测
 run_type: 0
@@ -40,7 +40,7 @@ trading_config:
   fee: 0.002 # 手续费
   stop_loss: 0.0005 # 止损
   take_profit: 0.001 # 止盈
-  high_threshold: 0.0002 # 高趋势线对应价格与当前价格差距
-  low_threshold: 0.0002 # 低趋势线对应价格与当前价格差距
+  enter_threshold: 0.0002 # 趋势线对应价格与当前价格差距
+  leave_threshold: 0.0003 # 离开趋势线后，价格与趋势线对应价格差距
   number: 1 # 小于阈值的趋势线数量
   reverse_percent: 0.02 # 潜在利润
