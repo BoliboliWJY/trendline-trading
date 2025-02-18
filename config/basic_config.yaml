@@ -9,7 +9,7 @@ coin_type: 'BTCUSDT'
 # total_length: 100000
 interval: '3m'
 
-visualize_mode: False
+visualize_mode: True
 visual_number: 200
 
 # 设定运行模式:1为实测，0为回测

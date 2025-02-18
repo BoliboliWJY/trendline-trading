@@ -9,7 +9,10 @@
 import time
 import datetime
 import numpy as np
-from binance.spot import Spot as Client
+
+# from binance.spot import Spot as Client
+from binance.um_futures import UMFutures  # 导入U本位合约市场客户端
+
 
 # from binance import Client
 from src.config_manager import load_basic_config
@@ -61,7 +64,7 @@ def main():
     trend_config["interval"] = time_number(trend_config["interval"]) * 1000
 
     # 创建 Binance 客户端
-    client = Client(key, secret)
+    client = UMFutures(key, secret)
 
     # --------------------------
     # 分情况处理：实盘交易模式 / 回测模式
@@ -100,12 +103,16 @@ def main():
 
         backtest_start_time = int(
             datetime.datetime.strptime(backtest_start_time_str, "%Y-%m-%d")
-            .replace(tzinfo=datetime.timezone.utc)
+            .replace(
+                tzinfo=datetime.timezone(datetime.timedelta(hours=8))
+            )  # 使用 UTC+8 时区
             .timestamp()
         )
         backtest_end_time = int(
             datetime.datetime.strptime(backtest_end_time_str, "%Y-%m-%d")
-            .replace(tzinfo=datetime.timezone.utc)
+            .replace(
+                tzinfo=datetime.timezone(datetime.timedelta(hours=0))
+            )  # 使用 UTC+0 时区
             .timestamp()
         )
 
@@ -124,7 +131,9 @@ def main():
         backtest_calculate_time = (
             int(
                 datetime.datetime.strptime(backtest_calculate_time_str, "%Y-%m-%d")
-                .replace(tzinfo=datetime.timezone.utc)
+                .replace(
+                    tzinfo=datetime.timezone(datetime.timedelta(hours=0))
+                )  # 使用 UTC+0 时区
                 .timestamp()
             )
             * 1000
@@ -204,7 +213,7 @@ def main():
                         tick_price
                     ) in backtest_tick_price.yield_prices_from_filtered_data(
                         lower_bound, upper_bound
-                    ):  # TODO 时间应该是+8，而不是+0，记得修改
+                    ):
                         signals = backtest_trader.evaluate_trade_signal(
                             tick_price, trading_config
                         )

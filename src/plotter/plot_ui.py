@@ -10,7 +10,7 @@ class TimeAxisItem(pg.AxisItem):
     def tickStrings(self, values, scale, spacing):
         # 将时间戳转换为日期时间字符串
         return [
-            datetime.datetime.fromtimestamp(value / 1000).strftime("%Y-%m-%d %H:%M:%S")
+            datetime.datetime.fromtimestamp(value / 1000, tz=datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
             for value in values
         ]
 
