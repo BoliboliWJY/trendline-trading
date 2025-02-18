@@ -78,7 +78,7 @@ class Backtester:
             "trend_high": self.last_filtered_high[:-1],
             "trend_low": self.last_filtered_low[:-1],
         }
-        
+
     # @profile_method
     def update_trend(self):
         """更新一次趋势数据，并返回更新后的数据; 如果数据结束则返回 False"""
@@ -86,7 +86,7 @@ class Backtester:
         if end_index >= len(self.data):
             print("Reached end of data. Stopping the backtest.")
             return False  # 如果数据结束，返回 False
-        
+
         # 更新趋势数据
         try:
             self.trend_high, self.trend_low, deleted_high, deleted_low = next(
@@ -103,7 +103,10 @@ class Backtester:
 
         return_trend_high = self.last_filtered_high
         return_trend_low = self.last_filtered_low
-        
+
+        #除了被删除的趋势还需要额外一个最近的且未被删除的趋势（但如果是实盘则需要全部计算）
+        removed_items_high.append([next(x[-1] for x in reversed(return_trend_high) if x)])
+        removed_items_low.append([next(x[-1] for x in reversed(return_trend_low) if x)])
 
         # 过滤趋势
         self.last_filtered_high, self.last_filtered_low = self.filter_trend(

@@ -10,6 +10,7 @@ import time
 import datetime
 import numpy as np
 import copy
+
 # from binance.spot import Spot as Client
 from binance.um_futures import UMFutures  # 导入U本位合约市场客户端
 
@@ -215,11 +216,15 @@ def main():
                     ):
                         signals = backtest_trader.evaluate_trade_signal(
                             tick_price, trading_config
-                        )
+                        )  # TODO 接下来就是判断开仓并记录开仓情况了
                         if signals.get("high_bounce"):
                             print("高趋势反弹信号")
-                        if signals.get("low_bounce"):
+                        elif signals.get("low_bounce"):
                             print("低趋势反弹信号")
+                        elif signals.get("high_break"):
+                            print("高趋势突破信号")
+                        elif signals.get("low_break"):
+                            print("低趋势突破信号")
 
                     filter_count += 1
                 else:  # 如果趋势未被过滤，则更新当前趋势
