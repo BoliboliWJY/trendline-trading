@@ -96,8 +96,8 @@ class Backtester:
             self.trend_high, self.trend_low, deleted_high, deleted_low = [], [], [], []
 
         # 处理被删除的趋势，如果发现突破则返回 True
-        removing_item_high = self._remove_items(self.last_filtered_high, deleted_high)
-        removing_item_low = self._remove_items(self.last_filtered_low, deleted_low)
+        removing_item_high, removed_items_high = self._remove_items(self.last_filtered_high, deleted_high)
+        removing_item_low, removed_items_low = self._remove_items(self.last_filtered_low, deleted_low)
         removing_item = removing_item_high or removing_item_low
         # print("发现突破" if removing_item else "未发现突破")
 
@@ -119,6 +119,8 @@ class Backtester:
             "trend_high": return_trend_high,
             "trend_low": return_trend_low,
             "removing_item": removing_item,
+            "removed_items_high": removed_items_high,
+            "removed_items_low": removed_items_low,
         }
         # 未过滤的数据
         # updated_trend = {
@@ -133,14 +135,16 @@ class Backtester:
 
     def _remove_items(self, filtered_list, deleted_items):
         removing_item = False
+        removed_items = []
         for idx, item_to_delete in deleted_items:
             if idx < len(filtered_list):
                 try:
                     filtered_list[idx].remove(item_to_delete)
+                    removed_items.append([item_to_delete])
                     removing_item = True
                 except ValueError:
                     pass
-        return removing_item
+        return removing_item, removed_items
 
     # @profile_method
     def run_backtest(self, delay=0):

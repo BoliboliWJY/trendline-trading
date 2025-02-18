@@ -17,15 +17,15 @@ class Trader:
         self.pre_state_low = False
 
     def get_trend_data(
-        self, data: np.ndarray, current_index: int, trend_high, trend_low
+        self, data: np.ndarray, current_index: int, removed_items_high, removed_items_low
     ):
         self.current_time = data[current_index][0]
-        self.trend_high = trend_high
-        self.trend_low = trend_low
+        self.trend_high = removed_items_high
+        self.trend_low = removed_items_low
 
         # 利用向量化计算 trend_high_prices
         valid_trend_high = [
-            pair for sublist in trend_high if sublist for pair in sublist if pair
+            pair for sublist in self.trend_high if sublist for pair in sublist if pair
         ]
         if valid_trend_high:
             slopes = [pair[0] for pair in valid_trend_high]
@@ -39,7 +39,7 @@ class Trader:
 
         # 利用向量化计算 trend_low_prices
         valid_trend_low = [
-            pair for sublist in trend_low if sublist for pair in sublist if pair
+            pair for sublist in self.trend_low if sublist for pair in sublist if pair
         ]
         if valid_trend_low:
             slopes = [pair[0] for pair in valid_trend_low]
@@ -59,7 +59,7 @@ class Trader:
 
         if self.trend_high_prices:
             high_level = self.trend_high_prices[-1]
-            distance_high = abs(tick_price - high_level)
+            distance_high = high_level - tick_price
 
             if not self.pre_state_high:
                 if distance_high < trading_config.get("enter_threshold", 0.0002):
@@ -72,7 +72,7 @@ class Trader:
 
         if self.trend_low_prices:
             low_level = self.trend_low_prices[-1]
-            distance_low = abs(tick_price - low_level)
+            distance_low = 1 - low_level / tick_price
 
             if not self.pre_state_low:
                 if distance_low < trading_config.get("enter_threshold", 0.0002):

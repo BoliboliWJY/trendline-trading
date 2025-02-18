@@ -9,7 +9,7 @@
 import time
 import datetime
 import numpy as np
-
+import copy
 # from binance.spot import Spot as Client
 from binance.um_futures import UMFutures  # 导入U本位合约市场客户端
 
@@ -198,14 +198,13 @@ def main():
 
             for current_trend in backtester.run_backtest():
                 # 保存上一次的趋势
-
-                last_trend_high = current_trend_high
-                last_trend_low = current_trend_low
                 if current_trend["removing_item"] == True:  # 如果趋势被过滤
                     # 载入趋势数据
+                    removed_items_high = current_trend["removed_items_high"]
+                    removed_items_low = current_trend["removed_items_low"]
                     print(base_trend_number)
                     backtest_trader.get_trend_data(
-                        data, base_trend_number, last_trend_high, last_trend_low
+                        data, base_trend_number, removed_items_high, removed_items_low
                     )
                     lower_bound = data[base_trend_number - 1, 6]
                     upper_bound = lower_bound + trend_config["interval"]
@@ -224,8 +223,7 @@ def main():
 
                     filter_count += 1
                 else:  # 如果趋势未被过滤，则更新当前趋势
-                    current_trend_high = current_trend["trend_high"]
-                    current_trend_low = current_trend["trend_low"]
+                    pass
 
                 trend_count += 1
                 base_trend_number += 1
