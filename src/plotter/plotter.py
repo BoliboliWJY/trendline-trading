@@ -4,6 +4,7 @@ import time
 from pyqtgraph.Qt import QtCore, QtWidgets
 import pyqtgraph as pg
 from src.plotter.plot_ui import PlotWindow
+from src.plotter.plot_setup import setup_plot_lines
 
 from collections import deque
 
@@ -27,6 +28,7 @@ class Plotter:
 
         self.frame_count = 0  # 帧计数
         self.start_index = len(self.trend_high) - self.visual_number  # 绘图起始索引
+        self.tick_index = self.start_index
         self.current_data = self.data[
             self.start_index : self.start_index + self.visual_number + self.delay
         ]  # 当前绘图数据
@@ -39,14 +41,16 @@ class Plotter:
         self.win.plotter = self
         self.plot = self.win.plot_widget.plotItem
 
-        self.plot_lines = {}
-        self.plot_config()
+        # 使用独立的函数初始化绘图内容
+        self.plot_lines, self.plot_configs = setup_plot_lines(
+            self.plot, self.visual_number
+        )
 
         self.set_plot_ranges(self.current_data)
         self.plot.getViewBox().setBackgroundColor("k")
 
         # 控制器
-        self.paused = True  # 是否暂停
+        self.paused = False  # 是否暂停
         from src.plotter.plot_controller import PlotController
 
         self.controller = PlotController(self)
@@ -72,91 +76,15 @@ class Plotter:
         self.plot.setXRange(x_min, x_max + self.visual_number * 0.05 * x_interval)
         self.plot.setYRange(y_min, y_max)
 
-    def plot_config(self):
-        linewidth = 300 / self.visual_number
-        self.plot_configs = [
-            {
-                "name": "high_low_green",
-                "color": "green",
-                "width": linewidth,
-                "columns": [0, 2, 0, 1],
-                "connect": "pairs",
-                "condition": lambda type_val: type_val == 0,
-            },
-            {
-                "name": "high_low_red",
-                "color": "red",
-                "width": linewidth,
-                "columns": [0, 2, 0, 1],
-                "connect": "pairs",
-                "condition": lambda type_val: type_val == 1,
-            },
-            {
-                "name": "open_close_green",
-                "color": "green",
-                "width": 2 * linewidth,
-                "columns": [0, 3, 0, 4],
-                "connect": "pairs",
-                "condition": lambda type_val: type_val == 0,
-            },
-            {
-                "name": "open_close_red",
-                "color": "red",
-                "width": 2 * linewidth,
-                "columns": [0, 3, 0, 4],
-                "connect": "pairs",
-                "condition": lambda type_val: type_val == 1,
-            },
-        ]
-
-        for config in self.plot_configs:
-            pen = pg.mkPen(color=config["color"], width=config["width"])
-            self.plot_lines[config["name"]] = self.plot.plot(
-                [], [], pen=pen, connect=config["connect"]
-            )
-
-        # Initialize Trend Lines
-        trend_pen_high = pg.mkPen(color="green", width=0.5, style=QtCore.Qt.SolidLine)
-        trend_pen_low = pg.mkPen(color="red", width=0.5, style=QtCore.Qt.SolidLine)
-        self.plot_lines["trend_high"] = self.plot.plot(
-            [], [], pen=trend_pen_high, name="Trend High"
-        )
-        self.plot_lines["trend_low"] = self.plot.plot(
-            [], [], pen=trend_pen_low, name="Trend Low"
-        )
-
-        horizontal_pen_high = pg.mkPen(
-            color="yellow", width=0.5, style=QtCore.Qt.SolidLine
-        )
-        self.plot_lines["horizontal_high"] = self.plot.plot(
-            [], [], pen=horizontal_pen_high, name="Horizontal High"
-        )
-        horizontal_pen_low = pg.mkPen(
-            color="white", width=0.5, style=QtCore.Qt.SolidLine
-        )
-        self.plot_lines["horizontal_low"] = self.plot.plot(
-            [], [], pen=horizontal_pen_low, name="Horizontal Low"
-        )
-
-        self.plot_lines["long"] = self.plot.plot(
-            [],
-            [],
-            pen=None,
-            symbol="o",
-            symbolBrush="green",
-            symbolSize=20,
-            name="Long",
-        )
-        self.plot_lines["short"] = self.plot.plot(
-            [], [], pen=None, symbol="o", symbolBrush="red", symbolSize=20, name="Short"
-        )
-
     def initial_plot(self):
+        self.signals = {}
         self.plot_in_one()
 
-    def update_plot(self, current_trend):
+    def update_plot(self, current_trend, signals, tick_index):
         self.trend_high = current_trend["trend_high"]
         self.trend_low = current_trend["trend_low"]
+        self.signals = signals
+        self.tick_index = tick_index
         self.current_data = self.data[
             self.start_index
             + self.frame_count : self.start_index
@@ -214,6 +142,21 @@ class Plotter:
             self.safe_update_plot_line(config["name"], x_data, y_data)
             snapshot[config["name"]] = (x_data, y_data)
 
+        # 处理 tick 相关数据，并确保每一帧都更新 bounce 线
+        if self.signals.get("bounce", None) is not None:
+            self.paused = True  # 暂停
+        tick_price = self.signals.get("tick_price", None)
+        current_x = self.data[self.tick_index, 0]
+        if tick_price is not None:
+            tick_price = np.array(tick_price)
+            x_data = np.full(tick_price.shape, current_x)
+            y_data = tick_price
+        else:
+            # 当没有 tick 信号时，清空 bounce 数据
+            x_data, y_data = [], []
+        self.safe_update_plot_line("bounce", x_data, y_data)
+        snapshot["bounce"] = (x_data, y_data)
+
         # 同时缓存当前的坐标轴范围
         snapshot["axis_range"] = {
             "x": self.plot.viewRange()[0],
@@ -228,16 +171,16 @@ class Plotter:
     def refresh_frame(self):
         if self.plot_cache and 0 <= self.current_snapshot_index < len(self.plot_cache):
             snapshot = self.plot_cache[self.current_snapshot_index]
-            self.win.plot_widget.setUpdatesEnabled(False) # 禁用自动更新
+            self.win.plot_widget.setUpdatesEnabled(False)  # 禁用自动更新
             for key, (x_data, y_data) in snapshot.items():
                 if key != "axis_range":  # 跳过坐标轴范围
                     self.safe_update_plot_line(key, x_data, y_data)
             # 恢复坐标轴范围
-            if "axis_range" in snapshot:
-                axis = snapshot["axis_range"]
-                self.plot.setXRange(*axis["x"])
-                self.plot.setYRange(*axis["y"])
-            self.win.plot_widget.setUpdatesEnabled(True) # 恢复自动更新
+            # if "axis_range" in snapshot:
+            #     axis = snapshot["axis_range"]
+            #     self.plot.setXRange(*axis["x"])
+            #     self.plot.setYRange(*axis["y"])
+            self.win.plot_widget.setUpdatesEnabled(True)  # 恢复自动更新
         else:
             print("No snapshot available.")
 

@@ -184,26 +184,54 @@ def main():
             plotter = Plotter(
                 data, type_data, initial_trend_data, visual_number, delay, cache_len
             )
+
             for current_trend in backtester.run_backtest():
                 # 如果处于暂停状态，则持续等待
+                signals = {}
                 while plotter.paused:
                     plotter.run()
                     time.sleep(0.05)
-                plotter.update_plot(current_trend)
+
+                if current_trend["removing_item"] == True:
+                    removed_items_high = current_trend["removed_items_high"]
+                    removed_items_low = current_trend["removed_items_low"]
+
+                    backtest_trader.get_trend_data(
+                        data, base_trend_number, removed_items_high, removed_items_low
+                    )
+                    lower_bound = data[base_trend_number - 1, 6]
+                    upper_bound = lower_bound + trend_config["interval"]
+                    backtest_trader.signals = {"tick_price": []}  # 重置交易信号
+                    for tick_price in backtest_tick_price.yield_prices_from_filtered_data(lower_bound, upper_bound):
+                        backtest_trader.evaluate_trade_signal(tick_price, trading_config)
+
+                    signals = backtest_trader.signals 
+                    # TODO 可以将bounce视作反弹，但是多与空单要分开记录，接下来就是计算平仓了，可以先简化一下只要到止盈止损就算
+                    if signals.get("bounce", None) is not None:
+                        # 输出时间
+                        tick_timestamp = data[base_trend_number, 0]
+                        tick_time = datetime.datetime.fromtimestamp(tick_timestamp / 1000)
+                        print("K线时间：", tick_time.strftime("%Y-%m-%d %H:%M:%S"))
+
+                plotter.update_plot(current_trend, signals, base_trend_number)
                 plotter.run()
+                base_trend_number += 1
             print("回测可视化已结束，继续后续操作...")
         else:
-
             trend_count = 1
             filter_count = 0
-
             for current_trend in backtester.run_backtest():
                 # 保存上一次的趋势
                 if current_trend["removing_item"] == True:  # 如果趋势被过滤
                     # 载入趋势数据
                     removed_items_high = current_trend["removed_items_high"]
                     removed_items_low = current_trend["removed_items_low"]
-                    print(base_trend_number)
+
+                    # 输出时间
+                    tick_timestamp = data[base_trend_number, 0]
+                    tick_time = datetime.datetime.fromtimestamp(tick_timestamp / 1000)
+                    print("Tick 时间：", tick_time.strftime("%Y-%m-%d %H:%M:%S"))
+
                     backtest_trader.get_trend_data(
                         data, base_trend_number, removed_items_high, removed_items_low
                     )
@@ -216,15 +244,7 @@ def main():
                     ):
                         signals = backtest_trader.evaluate_trade_signal(
                             tick_price, trading_config
-                        )  # TODO 接下来就是判断开仓并记录开仓情况了
-                        if signals.get("high_bounce"):
-                            print("高趋势反弹信号")
-                        elif signals.get("low_bounce"):
-                            print("低趋势反弹信号")
-                        elif signals.get("high_break"):
-                            print("高趋势突破信号")
-                        elif signals.get("low_break"):
-                            print("低趋势突破信号")
+                        )
 
                     filter_count += 1
                 else:  # 如果趋势未被过滤，则更新当前趋势
