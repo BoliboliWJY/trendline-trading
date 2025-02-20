@@ -143,19 +143,8 @@ class Plotter:
             snapshot[config["name"]] = (x_data, y_data)
 
         # 处理 tick 相关数据，并确保每一帧都更新 bounce 线
-        if self.signals.get("bounce", None) is not None:
-            self.paused = True  # 暂停
-        tick_price = self.signals.get("tick_price", None)
-        current_x = self.data[self.tick_index, 0]
-        if tick_price is not None:
-            tick_price = np.array(tick_price)
-            x_data = np.full(tick_price.shape, current_x)
-            y_data = tick_price
-        else:
-            # 当没有 tick 信号时，清空 bounce 数据
-            x_data, y_data = [], []
-        self.safe_update_plot_line("bounce", x_data, y_data)
-        snapshot["bounce"] = (x_data, y_data)
+        self.update_bounce("high_bounce", "high_tick_price", snapshot)
+        self.update_bounce("low_bounce", "low_tick_price", snapshot)
 
         # 同时缓存当前的坐标轴范围
         snapshot["axis_range"] = {
@@ -167,6 +156,26 @@ class Plotter:
         self.plot_cache.append(snapshot)
         if not self.paused:
             self.current_snapshot_index = len(self.plot_cache) - 1
+
+    def update_bounce(self, bounce_key, tick_price_key, snapshot):
+        """
+        统一处理 bounce 线的更新逻辑。若 bounce 信号存在则暂停画面更新，
+        并根据 tick_price_key 获取对应数据，更新指定 bounce_key 的数据。
+        """
+        if self.signals.get(bounce_key, None) is not None:
+            self.paused = True  # 暂停
+        
+        tick_price = self.signals.get(tick_price_key, None)
+        current_x = self.signals.get(tick_price_key, None)
+        current_x = self.data[self.tick_index, 0]
+        if tick_price is not None:
+            tick_price = np.array(tick_price)
+            x_data = np.full(tick_price.shape, current_x)
+            y_data = tick_price
+        else:
+            x_data, y_data = [], []
+        self.safe_update_plot_line(bounce_key, x_data, y_data)
+        snapshot[bounce_key] = (x_data, y_data)
 
     def refresh_frame(self):
         if self.plot_cache and 0 <= self.current_snapshot_index < len(self.plot_cache):

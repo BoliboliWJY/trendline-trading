@@ -171,7 +171,7 @@ def main():
         current_trend_high = initial_trend_data["trend_high"]
         current_trend_low = initial_trend_data["trend_low"]
 
-        backtest_trader = Trader()
+        backtest_trader = Trader(trading_config)
 
         # 6. 根据配置决定是否可视化
         if visualize_mode:
@@ -191,31 +191,39 @@ def main():
                 while plotter.paused:
                     plotter.run()
                     time.sleep(0.05)
-
-                if current_trend["removing_item"] == True:
+                # 获取趋势数据对应tick价格
+                hit_line = backtest_trader.get_trend_data(data, base_trend_number, current_trend["removed_items_high"], current_trend["removed_items_low"])
+                if backtest_trader.pre_state_high == True or backtest_trader.pre_state_low == True:
+                    continuous = True
+                else:
+                    backtest_trader.pre_state_high = False
+                    backtest_trader.pre_state_low = False
+                    continuous = False
+                if current_trend["removing_item"] == True or hit_line or continuous:
                     removed_items_high = current_trend["removed_items_high"]
                     removed_items_low = current_trend["removed_items_low"]
 
-                    backtest_trader.get_trend_data(
-                        data, base_trend_number, removed_items_high, removed_items_low
-                    )
                     lower_bound = data[base_trend_number - 1, 6]
                     upper_bound = lower_bound + trend_config["interval"]
                     backtest_trader.signals = {"tick_price": []}  # 重置交易信号
                     for tick_price in backtest_tick_price.yield_prices_from_filtered_data(lower_bound, upper_bound):
-                        backtest_trader.evaluate_trade_signal(tick_price, trading_config)
+                        backtest_trader.evaluate_trade_signal(tick_price)
 
                     signals = backtest_trader.signals 
-                    # TODO 可以将bounce视作反弹，但是多与空单要分开记录，接下来就是计算平仓了，可以先简化一下只要到止盈止损就算
+                    # TODO 接下来就是计算平仓了
                     if signals.get("bounce", None) is not None:
                         # 输出时间
                         tick_timestamp = data[base_trend_number, 0]
                         tick_time = datetime.datetime.fromtimestamp(tick_timestamp / 1000)
                         print("K线时间：", tick_time.strftime("%Y-%m-%d %H:%M:%S"))
-
+                        
+                        
+                if signals.get("high_bounce", None) is not None or signals.get("low_bounce", None) is not None:
+                    print(base_trend_number)
                 plotter.update_plot(current_trend, signals, base_trend_number)
                 plotter.run()
                 base_trend_number += 1
+
             print("回测可视化已结束，继续后续操作...")
         else:
             trend_count = 1

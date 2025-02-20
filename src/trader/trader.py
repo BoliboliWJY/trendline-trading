@@ -7,7 +7,7 @@ class Trader:
     输入tick数据，当前状态下的trend数据用于判断开平仓策略
     """
 
-    def __init__(self):
+    def __init__(self, trading_config: dict):
         self.tick_price = None
         self.trend_high = None
         self.trend_low = None
@@ -15,9 +15,17 @@ class Trader:
         # 记录是否进入趋势阈值范围内
         self.pre_state_high = False
         self.pre_state_low = False
+        
+        self.trading_config = trading_config
 
         # 记录交易信号
         self.signals = {"tick_price": []}
+        # self.signals = {
+        #     "high_bounce": False,
+        #     "low_bounce": False,
+        #     "high_tick_price": [],
+        #     "low_tick_price": [],
+        # }
 
     def get_trend_data(
         self,
@@ -30,6 +38,9 @@ class Trader:
         self.trend_high = removed_items_high
         self.trend_low = removed_items_low
 
+        # 记录是否逼近趋势线
+        hit_line = False
+        
         # 利用向量化计算 trend_high_prices
         valid_trend_high = [
             pair for sublist in self.trend_high if sublist for pair in sublist if pair
@@ -43,6 +54,12 @@ class Trader:
             self.trend_high_prices = sorted(prices, reverse=True)
         else:
             self.trend_high_prices = []
+            
+        nearest_tick_price = self.trend_high_prices[-1]
+        current_k_line_price = data[current_index, 1]
+        distance = 1 - current_k_line_price / nearest_tick_price
+        if distance < self.trading_config.get("enter_threshold", 0.0003):
+            hit_line = True
 
         # 利用向量化计算 trend_low_prices
         valid_trend_low = [
@@ -57,8 +74,18 @@ class Trader:
             self.trend_low_prices = sorted(prices)
         else:
             self.trend_low_prices = []
+            
+        nearest_tick_price = self.trend_low_prices[-1]
+        current_k_line_price = data[current_index, 2]
+        distance = 1 - nearest_tick_price / current_k_line_price
+        if distance < self.trading_config.get("enter_threshold", 0.0002):
+            hit_line = True
+            
+        return hit_line
+            
+        
 
-    def evaluate_trade_signal(self, tick_price: float, trading_config: dict):
+    def evaluate_trade_signal(self, tick_price: float):
         """
         根据当前tick价格和趋势数据评估交易信号，分别检查高趋势和低趋势数据。
         """
@@ -66,10 +93,10 @@ class Trader:
         # 检查高趋势数据，trend_type为'high'
         self._check_trend(
             trend_prices=self.trend_high_prices,
+            reverse_prices=self.trend_low_prices,
             state_flag="pre_state_high",
-            signal_key="bounce",
+            signal_key="high_bounce",
             tick_price=tick_price,
-            trading_config=trading_config,
             signals=self.signals,
             trend_type="high",
         )
@@ -77,10 +104,10 @@ class Trader:
         # 检查低趋势数据，trend_type为'low'
         self._check_trend(
             trend_prices=self.trend_low_prices,
+            reverse_prices=self.trend_high_prices,
             state_flag="pre_state_low",
-            signal_key="bounce",
+            signal_key="low_bounce",
             tick_price=tick_price,
-            trading_config=trading_config,
             signals=self.signals,
             trend_type="low",
         )
@@ -90,10 +117,10 @@ class Trader:
     def _check_trend(
         self,
         trend_prices: list,
+        reverse_prices: list,
         state_flag: str,
         signal_key: str,
         tick_price: float,
-        trading_config: dict,
         signals: dict,
         trend_type: str,
     ):
@@ -105,19 +132,20 @@ class Trader:
           state_flag: 状态属性名称（例如 "pre_state_high" 或 "pre_state_low"）。
           signal_key: 信号字典中对应的键（例如 "high_bounce" 或 "low_bounce"）。
           tick_price: 当前tick价格。
-          trading_config: 包含进入和退出阈值("enter_threshold"和"leave_threshold")的配置字典。
           signals: 用于记录交易信号的字典。
           trend_type: 指定当前趋势类型，取值 "high" 或 "low"。
         """
         if trend_prices:
             # 取当前最活跃的趋势阈值，使用列表最后一个元素
             active_threshold = trend_prices[-1]
-
+            reverse_active_threshold = reverse_prices[-1]
             # 根据趋势类型计算与当前tick价格的距离
             if trend_type == "high":
                 distance = 1 - tick_price / active_threshold
+                reverse_distance = 1 - reverse_active_threshold / tick_price
             else:  # "low"趋势
                 distance = 1 - active_threshold / tick_price
+                reverse_distance = 1 - tick_price / reverse_active_threshold
 
             # 如果当前的趋势线已经被突破，则需要弹出并重新计算新的阈值数据点
             while trend_prices and distance < 0:
@@ -127,22 +155,31 @@ class Trader:
                     active_threshold = trend_prices[-1]
                     if trend_type == "high":
                         distance = 1 - tick_price / active_threshold
+                        reverse_distance = 1 - reverse_active_threshold / tick_price
                     else:  # "low"趋势
                         distance = 1 - active_threshold / tick_price
+                        reverse_distance = 1 - tick_price / reverse_active_threshold
                 else:
                     break
-            # 如果还未进入趋势区域，则判断是否达到进入阈值
-            if not getattr(self, state_flag):
+            # 先判断是否存在潜在利润空间
+            min_profit = self.trading_config.get("potential_profit", 0.01)
+            has_profit_potential = reverse_distance > min_profit
 
-                if distance < trading_config.get("enter_threshold", 0.0002):
+            # 如果还未进入趋势区域，先评估是否值得进场
+            if not getattr(self, state_flag):
+                # 只有在有足够利润空间的情况下才考虑进场
+                if has_profit_potential and distance < self.trading_config.get(
+                    "enter_threshold", 0.0002
+                ):
                     setattr(self, state_flag, True)
             else:
                 # 已进入趋势区域，则判断是否离开或反向突破
-                if distance > trading_config.get("leave_threshold", 0.0003):
+                if distance > self.trading_config.get("leave_threshold", 0.0003):
                     signals[signal_key] = True
-                    signals["tick_price"].append(tick_price)
+                    bounce_signal_key = signal_key.replace("bounce", "tick_price")
+                    signals.setdefault(bounce_signal_key, []).append(tick_price)
                     setattr(self, state_flag, False)  # 重置状态
-                    trend_prices.pop()  # 一旦触发信号后移除该阈值
+                    # trend_prices.pop()  # 一旦触发信号后移除该阈值
                 elif distance < 0:
                     # 当距离变为负，说明价格已经突破趋势阈值，触发break信号
                     # break_signal_key = signal_key.replace("bounce", "break")

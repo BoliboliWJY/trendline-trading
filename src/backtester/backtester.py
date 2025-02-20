@@ -105,8 +105,9 @@ class Backtester:
         return_trend_low = self.last_filtered_low
 
         #除了被删除的趋势还需要额外一个最近的且未被删除的趋势（但如果是实盘则需要全部计算）
-        removed_items_high.append([next(x[-1] for x in reversed(return_trend_high) if x)])
+        removed_items_high.append([next(x[0] for x in reversed(return_trend_high) if x)])
         removed_items_low.append([next(x[-1] for x in reversed(return_trend_low) if x)])
+        
 
         # 过滤趋势
         self.last_filtered_high, self.last_filtered_low = self.filter_trend(
