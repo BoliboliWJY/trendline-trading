@@ -76,8 +76,8 @@ class BacktestTickPriceManager:
         """
         filtered_df = self.filter_prices_sorted_optimized(lower_bound, upper_bound)
         # 假设子表中存在 "price" 这一列
-        for price in filtered_df["price"]:
-            yield price
+        for price, timestamp in zip(filtered_df["price"], filtered_df["time"]):
+            yield price, timestamp
 
     def filter_prices_sorted_optimized(self, lower_bound: int, upper_bound: int):
         """

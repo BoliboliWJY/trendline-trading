@@ -1,5 +1,5 @@
 import numpy as np
-
+import datetime
 
 class Trader:
     """
@@ -85,7 +85,7 @@ class Trader:
             
         
 
-    def evaluate_trade_signal(self, tick_price: float):
+    def evaluate_trade_signal(self, tick_price: float, tick_timestamp: int):
         """
         根据当前tick价格和趋势数据评估交易信号，分别检查高趋势和低趋势数据。
         """
@@ -97,6 +97,7 @@ class Trader:
             state_flag="pre_state_high",
             signal_key="high_bounce",
             tick_price=tick_price,
+            tick_timestamp=tick_timestamp,
             signals=self.signals,
             trend_type="high",
         )
@@ -108,6 +109,7 @@ class Trader:
             state_flag="pre_state_low",
             signal_key="low_bounce",
             tick_price=tick_price,
+            tick_timestamp=tick_timestamp,
             signals=self.signals,
             trend_type="low",
         )
@@ -121,6 +123,7 @@ class Trader:
         state_flag: str,
         signal_key: str,
         tick_price: float,
+        tick_timestamp: int,
         signals: dict,
         trend_type: str,
     ):
@@ -132,6 +135,7 @@ class Trader:
           state_flag: 状态属性名称（例如 "pre_state_high" 或 "pre_state_low"）。
           signal_key: 信号字典中对应的键（例如 "high_bounce" 或 "low_bounce"）。
           tick_price: 当前tick价格。
+          tick_timestamp: 当前tick时间戳。
           signals: 用于记录交易信号的字典。
           trend_type: 指定当前趋势类型，取值 "high" 或 "low"。
         """
@@ -178,6 +182,7 @@ class Trader:
                     signals[signal_key] = True
                     bounce_signal_key = signal_key.replace("bounce", "tick_price")
                     signals.setdefault(bounce_signal_key, []).append(tick_price)
+                    signals.setdefault("tick_timestamp", []).append(tick_timestamp)
                     setattr(self, state_flag, False)  # 重置状态
                     # trend_prices.pop()  # 一旦触发信号后移除该阈值
                 elif distance < 0:
@@ -187,3 +192,39 @@ class Trader:
                     # signals["tick_price"].append(tick_price)
                     # setattr(self, state_flag, False)  # 重置状态
                     trend_prices.pop()
+
+    def notification_open(self, data, base_trend_number, signals):
+        """
+        通知开仓信号
+        """
+        tick_timestamp = data[base_trend_number, 0]
+        tick_time = datetime.datetime.fromtimestamp(tick_timestamp / 1000)
+        if signals.get("high_bounce", None) is not None:
+            print("K线时间：", tick_time.strftime("%Y-%m-%d %H:%M:%S"))
+            print("出现卖点", signals.get("high_tick_price", "无卖点价格信息"))
+        if signals.get("low_bounce", None) is not None:
+            print("K线时间：", tick_time.strftime("%Y-%m-%d %H:%M:%S"))
+            print("出现买点", signals.get("low_tick_price", "无买点价格信息"))
+            
+    
+    def monitor_close(self, tick_price: float, tick_timestamp: int, signals: dict):
+        """
+        监控平仓信号
+        Args:
+            tick_price: float, 当前tick价格
+            tick_timestamp: int, 当前tick时间戳
+            signals: dict, 交易信号，包含开仓信号和开仓价格还有开仓时间
+        """
+        # TODO 趋势线在tick价格可由self.trend_high_prices和self.trend_low_prices获取
+        # TODO 除了止损，止盈信号可以由新的反向反弹信号，或者与止损方向最近的趋势价格相比较，突破了则进行平仓
+        if signals.get("high_bounce", None) is not None:
+            pass
+        else:
+            
+            
+            
+        if signals.get("low_bounce", None) is not None:
+            pass
+        
+        
+        

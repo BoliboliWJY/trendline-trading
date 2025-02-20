@@ -206,20 +206,14 @@ def main():
                     lower_bound = data[base_trend_number - 1, 6]
                     upper_bound = lower_bound + trend_config["interval"]
                     backtest_trader.signals = {"tick_price": []}  # 重置交易信号
-                    for tick_price in backtest_tick_price.yield_prices_from_filtered_data(lower_bound, upper_bound):
-                        backtest_trader.evaluate_trade_signal(tick_price)
+                    for tick_price, tick_timestamp in backtest_tick_price.yield_prices_from_filtered_data(lower_bound, upper_bound):
+                        backtest_trader.evaluate_trade_signal(tick_price, tick_timestamp) # 评估开仓信号
+                        backtest_trader.monitor_close(tick_price, tick_timestamp, backtest_trader.signals) # 监控平仓信号
 
                     signals = backtest_trader.signals 
                     # TODO 接下来就是计算平仓了
-                    if signals.get("bounce", None) is not None:
-                        # 输出时间
-                        tick_timestamp = data[base_trend_number, 0]
-                        tick_time = datetime.datetime.fromtimestamp(tick_timestamp / 1000)
-                        print("K线时间：", tick_time.strftime("%Y-%m-%d %H:%M:%S"))
-                        
-                        
-                if signals.get("high_bounce", None) is not None or signals.get("low_bounce", None) is not None:
-                    print(base_trend_number)
+                    backtest_trader.notification_open(data, base_trend_number, signals)
+
                 plotter.update_plot(current_trend, signals, base_trend_number)
                 plotter.run()
                 base_trend_number += 1
@@ -267,6 +261,8 @@ def main():
 
         backtest_elapsed_time = time.perf_counter() - start_time
         print(f"回测耗时: {backtest_elapsed_time:.6f} 秒")
+
+
 
 
 if __name__ == "__main__":
