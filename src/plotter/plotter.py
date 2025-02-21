@@ -78,12 +78,14 @@ class Plotter:
 
     def initial_plot(self):
         self.signals = {}
+        self.close_signals = {}
         self.plot_in_one()
 
-    def update_plot(self, current_trend, signals, tick_index):
+    def update_plot(self, current_trend, signals, close_signals, tick_index):
         self.trend_high = current_trend["trend_high"]
         self.trend_low = current_trend["trend_low"]
         self.signals = signals
+        self.close_signals = close_signals
         self.tick_index = tick_index
         self.current_data = self.data[
             self.start_index
@@ -143,8 +145,11 @@ class Plotter:
             snapshot[config["name"]] = (x_data, y_data)
 
         # 处理 tick 相关数据，并确保每一帧都更新 bounce 线
-        self.update_bounce("high_bounce", "high_tick_price", snapshot)
-        self.update_bounce("low_bounce", "low_tick_price", snapshot)
+        self.update_point(self.signals, "high_bounce", "high_tick_price", snapshot)
+        self.update_point(self.signals, "low_bounce", "low_tick_price", snapshot)
+        
+        self.update_point(self.close_signals, "high_close", "high_tick_price", snapshot)
+        self.update_point(self.close_signals, "low_close", "low_tick_price", snapshot)
 
         # 同时缓存当前的坐标轴范围
         snapshot["axis_range"] = {
@@ -157,16 +162,18 @@ class Plotter:
         if not self.paused:
             self.current_snapshot_index = len(self.plot_cache) - 1
 
-    def update_bounce(self, bounce_key, tick_price_key, snapshot):
+    def update_point(self,signals, point_key, tick_price_key, snapshot):
         """
         统一处理 bounce 线的更新逻辑。若 bounce 信号存在则暂停画面更新，
         并根据 tick_price_key 获取对应数据，更新指定 bounce_key 的数据。
         """
-        if self.signals.get(bounce_key, None) is not None:
-            self.paused = True  # 暂停
+        if signals.get(point_key, None) is not None:
+            pass
+            # self.paused = True  # 暂停
+            
         
-        tick_price = self.signals.get(tick_price_key, None)
-        current_x = self.signals.get(tick_price_key, None)
+        tick_price = signals.get(tick_price_key, None)
+        current_x = signals.get(tick_price_key, None)
         current_x = self.data[self.tick_index, 0]
         if tick_price is not None:
             tick_price = np.array(tick_price)
@@ -174,8 +181,8 @@ class Plotter:
             y_data = tick_price
         else:
             x_data, y_data = [], []
-        self.safe_update_plot_line(bounce_key, x_data, y_data)
-        snapshot[bounce_key] = (x_data, y_data)
+        self.safe_update_plot_line(point_key, x_data, y_data)
+        snapshot[point_key] = (x_data, y_data)
 
     def refresh_frame(self):
         if self.plot_cache and 0 <= self.current_snapshot_index < len(self.plot_cache):

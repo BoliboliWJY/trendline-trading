@@ -116,32 +116,56 @@ def filter_by_trending_line(trend):
 
 
 def filter_trend(
-    regional_trend_high, regional_trend_low, trend_high, trend_low, data, config
+    original_trend_high, original_trend_low, trend_high, trend_low, data, config
 ):
     """
     过滤趋势,只过滤最后一个元素
+    Args:
+        regional_trend_high: 原始高趋势
+        regional_trend_low: 原始低趋势
+        trend_high: 之前被过滤过的高趋势
+        trend_low: 之前被过滤过的低趋势
+        data: 数据
+        config: 配置
     """
     # 添加新的趋势
 
     enable_filter = config.get("enable_filter", True)
     delay = config.get("delay", 10)
     interval = config.get("interval", "1000000")
+
+    trend_high.append(list(original_trend_high[-delay]))
+    trend_low.append(list(original_trend_low[-delay]))
+
+    if not enable_filter:
+        return (
+            filter_by_trending_line_last(trend_high, original_trend_high, 0),
+            filter_by_trending_line_last(trend_low, original_trend_low, 0),
+        )
+        
+    filters = {
+        "filter_reverse": filter_by_reverse_last,
+        "filter_slope": filter_by_slope_last,
+        "filter_line_age": filter_by_line_age_last,
+        "filter_distance": filter_by_distance_last,
+        "filter_trending_line": filter_by_trending_line_last,
+    }
+    
+    
     filter_reverse = config.get("filter_reverse", False)
     filter_slope = config.get("filter_slope", False)
     filter_line_age = config.get("filter_line_age", False)
     filter_distance = config.get("filter_distance", False)
     filter_trending_line = config.get("filter_trending_line", False)
 
-    trend_high.append(list(regional_trend_high[-delay]))
-    trend_low.append(list(regional_trend_low[-delay]))
     if not enable_filter:
         trend_high = filter_by_trending_line_last(
             trend_high,
-            regional_trend_high,
+            original_trend_high,
             0,
         )
         trend_low = filter_by_trending_line_last(
-            trend_low, regional_trend_low, 0
+            trend_low, original_trend_low, 0
         )
         return trend_high, trend_low
 
@@ -177,10 +201,10 @@ def filter_trend(
     # 趋势数量限制
     if filter_trending_line:
         trend_high = filter_by_trending_line_last(
-            trend_high, regional_trend_high, config.get("filter_trending_line_number", 5)
+            trend_high, original_trend_high, config.get("filter_trending_line_number", 5)
         )
         trend_low = filter_by_trending_line_last(
-            trend_low, regional_trend_low, config.get("filter_trending_line_number", 5)
+            trend_low, original_trend_low, config.get("filter_trending_line_number", 5)
         )
     return trend_high, trend_low
 

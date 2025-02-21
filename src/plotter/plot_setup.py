@@ -79,6 +79,11 @@ def setup_plot_lines(plot, visual_number):
     plot_lines["low_bounce"] = plot.plot(
         [], [], pen=None, symbol="x", symbolBrush="yellow", symbolSize=10, name="Low Bounce"
     )
-    
+    plot_lines["high_close"] = plot.plot(
+        [], [], pen=None, symbol="x", symbolBrush="purple", symbolSize=10, name="High Close"
+    )
+    plot_lines["low_close"] = plot.plot(
+        [], [], pen=None, symbol="x", symbolBrush="orange", symbolSize=10, name="Low Close"
+    )
 
     return plot_lines, plot_configs

@@ -1,6 +1,7 @@
 import numpy as np
 import datetime
 
+
 class Trader:
     """
     交易员类，用于处理交易逻辑
@@ -15,17 +16,28 @@ class Trader:
         # 记录是否进入趋势阈值范围内
         self.pre_state_high = False
         self.pre_state_low = False
-        
+
         self.trading_config = trading_config
 
         # 记录交易信号
-        self.signals = {"tick_price": []}
-        # self.signals = {
-        #     "high_bounce": False,
-        #     "low_bounce": False,
-        #     "high_tick_price": [],
-        #     "low_tick_price": [],
-        # }
+        self.signals = {}
+        self.close_signals = {}
+        # 是否触发break信号
+        self.break_signal = {
+            "high": False,
+            "low": False,
+        }
+        # 记录初始价格，避免被多次出现的买点价格覆盖
+        self.initial_price_low = 0
+        self.initial_times_low = 0
+        self.initial_price_high = 0
+        self.initial_times_high = 0
+        # 当前仓位订单信息
+        self.book_order = {}
+        # 历史仓位订单信息
+        self.history_order = {}
+        
+        self.fee = trading_config.get("fee", 0.001)
 
     def get_trend_data(
         self,
@@ -40,7 +52,7 @@ class Trader:
 
         # 记录是否逼近趋势线
         hit_line = False
-        
+
         # 利用向量化计算 trend_high_prices
         valid_trend_high = [
             pair for sublist in self.trend_high if sublist for pair in sublist if pair
@@ -54,7 +66,7 @@ class Trader:
             self.trend_high_prices = sorted(prices, reverse=True)
         else:
             self.trend_high_prices = []
-            
+
         nearest_tick_price = self.trend_high_prices[-1]
         current_k_line_price = data[current_index, 1]
         distance = 1 - current_k_line_price / nearest_tick_price
@@ -74,16 +86,14 @@ class Trader:
             self.trend_low_prices = sorted(prices)
         else:
             self.trend_low_prices = []
-            
+
         nearest_tick_price = self.trend_low_prices[-1]
         current_k_line_price = data[current_index, 2]
         distance = 1 - nearest_tick_price / current_k_line_price
         if distance < self.trading_config.get("enter_threshold", 0.0002):
             hit_line = True
-            
+
         return hit_line
-            
-        
 
     def evaluate_trade_signal(self, tick_price: float, tick_timestamp: int):
         """
@@ -153,6 +163,7 @@ class Trader:
 
             # 如果当前的趋势线已经被突破，则需要弹出并重新计算新的阈值数据点
             while trend_prices and distance < 0:
+                self.break_signal[trend_type] = True
                 setattr(self, state_flag, False)  # 重置状态
                 trend_prices.pop()
                 if trend_prices:
@@ -179,12 +190,30 @@ class Trader:
             else:
                 # 已进入趋势区域，则判断是否离开或反向突破
                 if distance > self.trading_config.get("leave_threshold", 0.0003):
+                    # 发出开仓信号
                     signals[signal_key] = True
                     bounce_signal_key = signal_key.replace("bounce", "tick_price")
                     signals.setdefault(bounce_signal_key, []).append(tick_price)
-                    signals.setdefault("tick_timestamp", []).append(tick_timestamp)
+                    # 记录开仓时间
+                    open_signal_key = signal_key.replace("bounce", "open")
+                    signals.setdefault(open_signal_key, []).append(tick_timestamp)
                     setattr(self, state_flag, False)  # 重置状态
-                    # trend_prices.pop()  # 一旦触发信号后移除该阈值
+                    # 记录开仓信号
+                    open_signal_key = signal_key.replace("bounce", "open")
+                    self.book_order.setdefault(open_signal_key, []).append(
+                        [tick_timestamp, tick_price]
+                    )
+                    # 记录初始价格
+                    if trend_type == "high":
+                        if not self.initial_price_high:
+                            self.initial_price_high = tick_price
+                            self.initial_times_high = tick_timestamp
+                    else:
+                        if not self.initial_price_low:
+                            self.initial_price_low = tick_price
+                            self.initial_times_low = tick_timestamp
+                    self.break_signal[trend_type] = False  # 重置break信号
+
                 elif distance < 0:
                     # 当距离变为负，说明价格已经突破趋势阈值，触发break信号
                     # break_signal_key = signal_key.replace("bounce", "break")
@@ -201,12 +230,11 @@ class Trader:
         tick_time = datetime.datetime.fromtimestamp(tick_timestamp / 1000)
         if signals.get("high_bounce", None) is not None:
             print("K线时间：", tick_time.strftime("%Y-%m-%d %H:%M:%S"))
-            print("出现卖点", signals.get("high_tick_price", "无卖点价格信息"))
+            print("出现卖点开仓信号", signals.get("high_tick_price", "无卖点价格信息"))
         if signals.get("low_bounce", None) is not None:
             print("K线时间：", tick_time.strftime("%Y-%m-%d %H:%M:%S"))
-            print("出现买点", signals.get("low_tick_price", "无买点价格信息"))
-            
-    
+            print("出现买点开仓信号", signals.get("low_tick_price", "无买点价格信息"))
+
     def monitor_close(self, tick_price: float, tick_timestamp: int, signals: dict):
         """
         监控平仓信号
@@ -215,16 +243,91 @@ class Trader:
             tick_timestamp: int, 当前tick时间戳
             signals: dict, 交易信号，包含开仓信号和开仓价格还有开仓时间
         """
-        # TODO 趋势线在tick价格可由self.trend_high_prices和self.trend_low_prices获取
-        # TODO 除了止损，止盈信号可以由新的反向反弹信号，或者与止损方向最近的趋势价格相比较，突破了则进行平仓
-        if signals.get("high_bounce", None) is not None:
-            pass
+        # 处理高趋势单平仓
+        
+        if "high_open" in self.book_order and self.book_order["high_open"]:
+            stop_loss = 1 - self.book_order["high_open"][0][1] / tick_price >= self.trading_config.get("stop_loss", 0.008)
+
+            if (
+                stop_loss
+                or self.break_signal["high"]
+                or self.signals.get("low_bounce", None) is not None
+                or 1 - tick_price / self.initial_price_high >= self.fee * 2 # 大于2倍手续费就收手
+            ):
+                # 当大于止损率，或者触发break信号，或者出现新的低点反弹信号，需要平仓
+                profit = 1 - tick_price / self.initial_price_high - self.fee
+                history_record = [
+                    self.initial_times_high,
+                    self.initial_price_high,
+                    tick_timestamp,
+                    tick_price,
+                    profit,
+                ]
+                self.history_order.setdefault("high_order", []).append(history_record)
+                print(
+                    "卖点平仓信号",
+                    history_record[-2],
+                    "时间为",
+                    datetime.datetime.fromtimestamp(history_record[-3] / 1000).strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    ),
+                )
+                # 生成平仓信号
+                close_signal_key = "high_close"
+                self.close_signals[close_signal_key] = True
+                tick_price_key = close_signal_key.replace("close", "tick_price")
+                self.close_signals.setdefault(tick_price_key, []).append(tick_price)
+                timestamp_key = close_signal_key.replace("close", "timestamp")
+                self.close_signals.setdefault(timestamp_key, []).append(tick_timestamp)
+                
+                self.book_order["high_open"] = []
+                
+                self.initial_price_high = 0
+                self.initial_times_high = 0
         else:
-            
-            
-            
-        if signals.get("low_bounce", None) is not None:
+            # 若没有有效的高趋势订单，则无需处理
             pass
-        
-        
-        
+
+        # 处理低趋势单平仓
+        if "low_open" in self.book_order and self.book_order["low_open"]:
+            stop_loss = 1 - tick_price / self.book_order["low_open"][0][1] >= self.trading_config.get("stop_loss", 0.008)
+            if (
+                stop_loss
+                or self.break_signal["low"]
+                or self.signals.get("high_bounce", None) is not None
+                or 1 - self.initial_price_low / tick_price >= self.fee * 2 # 大于2倍手续费就收手
+            ):
+                # 当大于止损率，或者触发break信号，或者出现新的高点反弹信号，需要平仓
+                profit = 1 - self.initial_price_low / tick_price - self.fee
+                history_record = [
+                    self.initial_times_low,
+                    self.initial_price_low,
+                    tick_timestamp,
+                    tick_price,
+                    profit,
+                ]
+                self.history_order.setdefault("low_order", []).append(history_record)
+                print(
+                    "买点平仓信号",
+                    history_record[-2],
+                    "时间为",
+                    datetime.datetime.fromtimestamp(history_record[-3] / 1000).strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    ),
+                )
+                
+                # 生成平仓信号
+                close_signal_key = "low_close"
+                self.close_signals[close_signal_key] = True
+                tick_price_key = close_signal_key.replace("close", "tick_price")
+                self.close_signals.setdefault(tick_price_key, []).append(tick_price)
+                timestamp_key = close_signal_key.replace("close", "timestamp")
+                self.close_signals.setdefault(timestamp_key, []).append(tick_timestamp)
+            
+                self.book_order["low_open"] = []
+                
+                self.initial_price_low = 0
+                self.initial_times_low = 0
+        else:
+            # 若没有有效的低趋势订单，则无需处理
+            pass
