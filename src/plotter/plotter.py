@@ -63,6 +63,7 @@ class Plotter:
         self.fps_count = 0
 
         self.initial_plot()
+        
 
     def set_plot_ranges(self, data_slice):
         """
@@ -168,8 +169,8 @@ class Plotter:
         并根据 tick_price_key 获取对应数据，更新指定 bounce_key 的数据。
         """
         if signals.get(point_key, None) is not None:
-            pass
-            # self.paused = True  # 暂停
+            # pass
+            self.paused = True  # 暂停
             
         
         tick_price = signals.get(tick_price_key, None)

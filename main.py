@@ -186,7 +186,7 @@ def main():
             )
 
             for current_trend in backtester.run_backtest():
-
+                open_times = 0 # 初始化开仓次数
                 # 如果处于暂停状态，则持续等待
                 signals = {}
                 close_signals = {}
@@ -202,17 +202,18 @@ def main():
                     backtest_trader.pre_state_low = False
                     continuous = False
                 # 开仓判断
-                if current_trend["removing_item"] == True or hit_line or continuous:
+                if current_trend["removing_item"] == True or hit_line or continuous and open_times < trading_config["open_times"]:
                     lower_bound = data[base_trend_number - 1, 6]
                     upper_bound = lower_bound + trend_config["interval"]
                     backtest_trader.signals = {"tick_price": []}  # 重置交易信号
                     backtest_trader.close_signals = {"tick_price": []}  # 重置平仓信号
                     for tick_price, tick_timestamp in backtest_tick_price.yield_prices_from_filtered_data(lower_bound, upper_bound):
-                        # TODO 开仓逻辑仍有问题，需要修改！
                         backtest_trader.evaluate_trade_signal(tick_price, tick_timestamp) # 评估开仓信号
-                        backtest_trader.monitor_close(tick_price, tick_timestamp, backtest_trader.signals)  # 监控平仓信号
+                        backtest_trader.monitor_close(tick_price, tick_timestamp, backtest_trader.signals, base_trend_number)  # 监控平仓信号
+                    if "high_open" in backtest_trader.book_order and backtest_trader.book_order["high_open"] or "low_open" in backtest_trader.book_order and backtest_trader.book_order["low_open"]:
+                        open_times += 1 # 开仓次数+1
                     signals = backtest_trader.signals
-                    # TODO 平仓逻辑仍有问题，无法正常止损（被提前了）
+                    # TODO 平仓逻辑仍有问题，锁定利润（移动止损）仍不对
                     close_signals = backtest_trader.close_signals
 
                 backtest_trader.notification_open(data, base_trend_number, signals)
