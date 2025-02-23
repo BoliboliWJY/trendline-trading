@@ -1,6 +1,5 @@
-from src.filter.filters import filter_trend_initial
 
-def compute_initial_trends(current_data, trend_generator, data, trend_config, last_filtered_high, last_filtered_low):
+def compute_initial_trends(current_data, trend_generator):
     """
     计算初始趋势
     这个方法也可以用于实时交易初始化
@@ -24,8 +23,5 @@ def compute_initial_trends(current_data, trend_generator, data, trend_config, la
     except StopIteration:
         trend_high, trend_low, deleted_high, deleted_low = [], [], [], []
 
-    last_filtered_high, last_filtered_low = filter_trend_initial(
-        trend_high, trend_low, data, trend_config
-    )
 
-    return trend_high, trend_low, last_filtered_high, last_filtered_low
+    return trend_high, trend_low

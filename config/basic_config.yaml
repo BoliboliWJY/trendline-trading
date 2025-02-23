@@ -10,22 +10,23 @@ coin_type: 'BTCUSDT'
 interval: '3m'
 
 visualize_mode: True
-visual_number: 200
+visual_number: 1000
 
 # 设定运行模式:1为实测，0为回测
 run_type: 0
 
 backtest_config:
   backtest_start_time: '2024-10-10'
+  # backtest_start_time: '2024-11-30'
   backtest_end_time: '2024-12-31'
   backtest_calculate_time: '2024-12-01'
 
 # 过滤趋势配置参数
 trend_config:
-  enable_filter: False # 是否启用过滤
-  delay: 1                    # 生成延迟
+  enable_filter: True # 是否启用过滤
+  delay: 9                    # 生成延迟
   interval: '3m'              # 注意此处与顶层 interval 保持一致，可在代码中转换成毫秒
-  filter_reverse: False      # 反转限制: False 表示不过滤
+  filter_reverse: True     # 反转限制: False 表示不过滤
   filter_slope: False        # 斜率大小限制: False 表示不过滤
   slope_threshold: 0.0001       # 最大斜率阈值
   filter_line_age: True       # 趋势年龄限制

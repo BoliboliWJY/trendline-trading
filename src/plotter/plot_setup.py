@@ -85,5 +85,9 @@ def setup_plot_lines(plot, visual_number):
     plot_lines["low_close"] = plot.plot(
         [], [], pen=None, symbol="x", symbolBrush="orange", symbolSize=10, name="Low Close"
     )
+    
+    plot_lines["price_time"] = plot.plot(
+        [], [], pen=None, symbol="o", symbolBrush="white", symbolSize=10, name="Price Time"
+    )
 
     return plot_lines, plot_configs

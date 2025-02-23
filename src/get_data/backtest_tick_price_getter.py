@@ -76,9 +76,11 @@ class BacktestTickPriceManager:
         """
         filtered_df = self.filter_prices_sorted_optimized(lower_bound, upper_bound)
         # 假设子表中存在 "price" 这一列
-        for price, timestamp in zip(filtered_df["price"], filtered_df["time"]):
-            yield price, timestamp
+        # for price, timestamp in zip(filtered_df["price"], filtered_df["time"]):
+        #     yield price, timestamp
 
+        price_time_array = filtered_df.select(["price", "time"]).to_numpy()
+        return price_time_array
     def filter_prices_sorted_optimized(self, lower_bound: int, upper_bound: int):
         """
         利用 Polars 内置的二分查找（search_sorted）来定位时间范围，
@@ -97,3 +99,31 @@ class BacktestTickPriceManager:
         # slice 方法的第二个参数表示切片长度
         filtered_df = self.combined_df.slice(start_idx, end_idx - start_idx)
         return filtered_df
+
+    def package_data(self, start_time_number, end_time_number, base_filename):
+        """
+        将时间戳和价格数据打包成一个数组
+        """
+        # result_slices = []
+        time_series = self.combined_df["time"]
+        for i, (start_time, end_time) in enumerate(zip(start_time_number, end_time_number)):
+            start_idx = time_series.search_sorted(start_time, side="right")
+            end_idx = time_series.search_sorted(end_time, side="left")
+            df_chunk = self.combined_df.slice(start_idx, end_idx - start_idx)
+            df_chunk.write_parquet(f"{base_filename}_chunk_{i}.parquet")
+            
+
+    def package_data_loader(self, chunk_index:int, base_filename:str):
+        """
+        读取 package_data 打包的数据
+        """
+        filename = f"{base_filename}_chunk_{chunk_index}.parquet"
+        try:
+            loaded_df = pl.read_parquet(filename).select(["price","time"]).to_numpy()
+            return loaded_df
+        except FileNotFoundError:
+            print(f"Error: 文件 {filename} 未找到。")
+            return None
+        except Exception as e:
+            print(f"Error: 读取文件时发生错误: {e}")
+            return None

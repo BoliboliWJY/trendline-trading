@@ -7,6 +7,7 @@
 """
 
 import time
+from tqdm import tqdm
 import datetime
 import numpy as np
 import copy
@@ -20,7 +21,7 @@ from src.config_manager import load_basic_config
 from src.data_loader import load_or_fetch_data
 from src.trend_calculator.trend_generator import backtest_calculate_trend_generator
 from src.trend_calculator.trend_process import initial_single_slope, calculate_trend
-from src.filter.filters import filter_trend
+from src.filter.filters import trend_filter
 from src.time_number import time_number
 from src.latest_data.new_price import get_current_price
 from src.latest_data.latest_klines import get_latest_klines
@@ -32,9 +33,6 @@ from src.get_data.data_getter import data_getter
 
 # 回测tick价格管理器
 from src.get_data.backtest_tick_price_getter import BacktestTickPriceManager
-
-# 交易员
-from src.trader.trader import Trader
 
 
 # %%
@@ -159,19 +157,11 @@ def main():
             calculate_trend=calculate_trend,
         )
 
-        backtester = Backtester(
-            data,
-            type_data,
-            trend_generator,
-            filter_trend,
-            trend_config,
-            base_trend_number,
-        )
+        backtester = Backtester(data,type_data,trend_generator,base_trend_number)
         initial_trend_data = backtester.initial_trend_data
-        current_trend_high = initial_trend_data["trend_high"]
-        current_trend_low = initial_trend_data["trend_low"]
-
-        backtest_trader = Trader(trading_config)
+        initial_filtered_trend_data = trend_filter(initial_trend_data,data,trend_config).result
+        
+        
 
         # 6. 根据配置决定是否可视化
         if visualize_mode:
@@ -182,109 +172,39 @@ def main():
             )
             cache_len = 1000  # 缓存长度
             plotter = Plotter(
-                data, type_data, initial_trend_data, visual_number, delay, cache_len
+                data, type_data, initial_filtered_trend_data, base_trend_number, visual_number, cache_len
             )
+            base_trend_number += 1
 
-            for current_trend in backtester.run_backtest():
-                open_times = 0 # 初始化开仓次数
-                # 如果处于暂停状态，则持续等待
-                signals = {}
-                close_signals = {}
-                while plotter.paused:
+            parquet_filename = f"backtest/tick/BTCUSDT/parquet/{coin_type}_{interval}_2024-11-30_{backtest_end_time_str}_{backtest_calculate_time_str}"
+            # backtest_tick_price.package_data(data[base_trend_number:,5],data[base_trend_number:,6],parquet_filename)
+
+            parquet_index = 0
+            # start_time = time.time()
+            with tqdm(desc="Backtesting Progress", mininterval=1) as pbar:
+                for current_trend in backtester.run_backtest():
+
+                    signals = {}
+                    close_signals = {}
+                    while plotter.paused:
+                        plotter.run()
+                        time.sleep(0.05)
+
+                    # price_time_array = backtest_tick_price.yield_prices_from_filtered_data(data[base_trend_number,5],data[base_trend_number,6])
+                    price_time_array = backtest_tick_price.package_data_loader(parquet_index,parquet_filename)
+                    parquet_index += 1
+
+                    plotter.update_plot(current_trend, signals, close_signals, base_trend_number, price_time_array)
                     plotter.run()
-                    time.sleep(0.05)
-                # 获取趋势数据对应tick价格
-                hit_line = backtest_trader.get_trend_data(data, base_trend_number, current_trend["removed_items_high"], current_trend["removed_items_low"])
-                # 获取趋势线开仓状态（保留上一次的）
-                if backtest_trader.pre_state_high == True or backtest_trader.pre_state_low == True:
-                    continuous = True
-                else:
-                    backtest_trader.pre_state_high = False
-                    backtest_trader.pre_state_low = False
-                    continuous = False
-                    
-                if backtest_trader.pre_close_high == True or backtest_trader.pre_close_low == True:
-                    continuous_close = True
-                else:
-                    backtest_trader.pre_close_high = False
-                    backtest_trader.pre_close_low = False
-                    continuous_close = False
 
-                lower_bound = data[base_trend_number - 1, 6]
-                upper_bound = lower_bound + trend_config["interval"]
-                backtest_trader.signals = {"tick_price": []}  # 重置交易信号
-                backtest_trader.close_signals = {"tick_price": []}  # 重置平仓信号
-                # 开仓判断
-                if current_trend["removing_item"] == True or hit_line or continuous or continuous_close:
-                    for tick_price, tick_timestamp in backtest_tick_price.yield_prices_from_filtered_data(lower_bound, upper_bound):
-                        if open_times < trading_config["open_times"]:
-                            backtest_trader.evaluate_trade_signal(tick_price, tick_timestamp) # 评估开仓信号
-                        backtest_trader.monitor_close(tick_price, tick_timestamp, backtest_trader.signals, base_trend_number)  # 监控平仓信号
-                    if "high_open" in backtest_trader.book_order and backtest_trader.book_order["high_open"] or "low_open" in backtest_trader.book_order and backtest_trader.book_order["low_open"]:
-                        open_times += 1 # 开仓次数+1
-                    signals = backtest_trader.signals
-                    # TODO 平仓逻辑仍有问题，锁定利润（移动止损）仍不对
-                    close_signals = backtest_trader.close_signals
+                    base_trend_number += 1
 
-                backtest_trader.notification_open(data, base_trend_number, signals)
-
-                plotter.update_plot(current_trend, signals, close_signals, base_trend_number)
-                plotter.run()
-                base_trend_number += 1
+                    pbar.update(1)
 
             print("回测可视化已结束，继续后续操作...")
         else:
-            for current_trend in backtester.run_backtest():
-                # 如果处于暂停状态，则持续等待
-                signals = {}
-                close_signals = {}
+            pass
 
-                # 获取趋势数据对应tick价格
-                hit_line = backtest_trader.get_trend_data(
-                    data,
-                    base_trend_number,
-                    current_trend["removed_items_high"],
-                    current_trend["removed_items_low"],
-                )
-                if (
-                    backtest_trader.pre_state_high == True
-                    or backtest_trader.pre_state_low == True
-                ):
-                    continuous = True
-                else:
-                    backtest_trader.pre_state_high = False
-                    backtest_trader.pre_state_low = False
-                    continuous = False
-                # 开仓判断
-                if current_trend["removing_item"] == True or hit_line or continuous:
-                    lower_bound = data[base_trend_number - 1, 6]
-                    upper_bound = lower_bound + trend_config["interval"]
-                    backtest_trader.signals = {"tick_price": []}  # 重置交易信号
-                    backtest_trader.close_signals = {"tick_price": []}  # 重置平仓信号
-                    for (
-                        tick_price,
-                        tick_timestamp,
-                    ) in backtest_tick_price.yield_prices_from_filtered_data(
-                        lower_bound, upper_bound
-                    ):
-                        backtest_trader.evaluate_trade_signal(
-                            tick_price, tick_timestamp
-                        )  # 评估开仓信号
-                        backtest_trader.monitor_close(
-                            tick_price, tick_timestamp, backtest_trader.signals
-                        )  # 监控平仓信号
-                    signals = backtest_trader.signals
-                    close_signals = backtest_trader.close_signals
-
-                backtest_trader.notification_open(data, base_trend_number, signals)
-
-                base_trend_number += 1
-
-            print("回测无可视化模式下已结束，继续后续操作...")
-
-        backtest_elapsed_time = time.perf_counter() - start_time
-        print(f"回测耗时: {backtest_elapsed_time:.6f} 秒")
-        print(backtest_trader.history_order)
 
 if __name__ == "__main__":
     main()
