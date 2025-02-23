@@ -195,20 +195,30 @@ def main():
                     time.sleep(0.05)
                 # 获取趋势数据对应tick价格
                 hit_line = backtest_trader.get_trend_data(data, base_trend_number, current_trend["removed_items_high"], current_trend["removed_items_low"])
+                # 获取趋势线开仓状态（保留上一次的）
                 if backtest_trader.pre_state_high == True or backtest_trader.pre_state_low == True:
                     continuous = True
                 else:
                     backtest_trader.pre_state_high = False
                     backtest_trader.pre_state_low = False
                     continuous = False
+                    
+                if backtest_trader.pre_close_high == True or backtest_trader.pre_close_low == True:
+                    continuous_close = True
+                else:
+                    backtest_trader.pre_close_high = False
+                    backtest_trader.pre_close_low = False
+                    continuous_close = False
+
+                lower_bound = data[base_trend_number - 1, 6]
+                upper_bound = lower_bound + trend_config["interval"]
+                backtest_trader.signals = {"tick_price": []}  # 重置交易信号
+                backtest_trader.close_signals = {"tick_price": []}  # 重置平仓信号
                 # 开仓判断
-                if current_trend["removing_item"] == True or hit_line or continuous and open_times < trading_config["open_times"]:
-                    lower_bound = data[base_trend_number - 1, 6]
-                    upper_bound = lower_bound + trend_config["interval"]
-                    backtest_trader.signals = {"tick_price": []}  # 重置交易信号
-                    backtest_trader.close_signals = {"tick_price": []}  # 重置平仓信号
+                if current_trend["removing_item"] == True or hit_line or continuous or continuous_close:
                     for tick_price, tick_timestamp in backtest_tick_price.yield_prices_from_filtered_data(lower_bound, upper_bound):
-                        backtest_trader.evaluate_trade_signal(tick_price, tick_timestamp) # 评估开仓信号
+                        if open_times < trading_config["open_times"]:
+                            backtest_trader.evaluate_trade_signal(tick_price, tick_timestamp) # 评估开仓信号
                         backtest_trader.monitor_close(tick_price, tick_timestamp, backtest_trader.signals, base_trend_number)  # 监控平仓信号
                     if "high_open" in backtest_trader.book_order and backtest_trader.book_order["high_open"] or "low_open" in backtest_trader.book_order and backtest_trader.book_order["low_open"]:
                         open_times += 1 # 开仓次数+1

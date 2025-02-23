@@ -17,6 +17,10 @@ class Trader:
         self.pre_state_high = False
         self.pre_state_low = False
 
+        # 记录开仓是否被平仓
+        self.pre_close_high = False
+        self.pre_close_low = False
+
         self.trading_config = trading_config
 
         # 记录交易信号
@@ -360,12 +364,9 @@ class Trader:
             # 如果利润空间大于阈值，则开启移动止损
             if 1 - tick_price / self.book_order["high_open"][0][1] >= self.trading_config.get("trailing_profit_threshold", 0.002):
                 self.trailing = True # 开启移动止损
-                
 
-            if (
-                stop_loss
-                or self.break_signal["high"] # 同向方向触发break信号（支撑被打破，可能造成更多损失）
-            ):
+            do_break_signal = self.break_signal["high"] and tick_price < self.book_order["high_open"][0][1] * (1 - self.trading_config.get("trailing_stop_loss", 0.001))
+            if stop_loss or do_break_signal:  # 同向方向触发break信号（支撑被打破，可能造成更多损失）
                 profit = 1 - tick_price / self.book_order["high_open"][0][1] - self.fee
                 history_record = [
                     self.book_order["high_open"][0][0],
@@ -400,6 +401,10 @@ class Trader:
                 self.initial_times_high = 0
 
                 self.trailing = False # 关闭移动止损
+
+                self.pre_close_high = False
+            else:
+                self.pre_close_high = True # 还没平仓
         else:
             # 若没有有效的订单，则无需处理
             pass
@@ -412,11 +417,9 @@ class Trader:
             # 如果利润空间大于阈值，则开启移动止损
             if 1 - self.book_order["low_open"][0][1] / tick_price >= self.trading_config.get("trailing_profit_threshold", 0.002):
                 self.trailing = True # 开启移动止损
-                
-            if(
-                stop_loss
-                or self.break_signal["low"] # 同向方向触发break信号（阻力被打破，可能造成更多损失）
-            ):
+
+            do_break_signal = self.break_signal["low"] and tick_price > self.book_order["low_open"][0][1] * (1 + self.trading_config.get("trailing_stop_loss", 0.001))
+            if stop_loss or do_break_signal:  # 同向方向触发break信号（阻力被打破，可能造成更多损失）
                 profit = 1 - self.book_order["low_open"][0][1] / tick_price - self.fee
                 history_record = [
                     self.book_order["low_open"][0][0],
@@ -450,6 +453,10 @@ class Trader:
                 self.initial_times_low = 0
 
                 self.trailing = False # 关闭移动止损
+
+                self.pre_close_low = False
+            else:
+                self.pre_close_low = True # 还没平仓
         else:
             # 若没有有效的订单，则无需处理
             pass
