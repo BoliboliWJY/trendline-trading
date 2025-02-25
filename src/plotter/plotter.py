@@ -68,11 +68,13 @@ class Plotter:
         """
         Sets the X and Y ranges of the plot based on the provided data slice.
         """
-        x_interval = data_slice[1, 0] - data_slice[0, 0]
-        x_min = data_slice[0, 0]
-        x_max = data_slice[-1, 0]
-        y_min = np.min(data_slice[:, 1:3])
-        y_max = np.max(data_slice[:, 1:3])
+        # 使用 high 时间作为x轴
+        x_interval = data_slice[1, -1] - data_slice[0, -1]
+        x_min = data_slice[0, -1]
+        x_max = data_slice[-1, -1]
+        # y轴计算时采集高价（列1）和低价（列3）
+        y_min = np.min([np.min(data_slice[:, 1]), np.min(data_slice[:, 3])])
+        y_max = np.max([np.max(data_slice[:, 1]), np.max(data_slice[:, 3])])
         self.plot.setXRange(x_min, x_max + self.visual_number * 0.05 * x_interval)
         self.plot.setYRange(y_min / 1.001, y_max * 1.001)
 
@@ -82,7 +84,9 @@ class Plotter:
         self.price_time_array = np.array([])
         self.plot_in_one()
 
-    def update_plot(self, current_trend, signals, close_signals, tick_index, price_time_array):
+    def update_plot(
+        self, current_trend, signals, close_signals, tick_index, price_time_array
+    ):
         self.trend_high = current_trend["trend_high"]
         self.trend_low = current_trend["trend_low"]
         self.signals = signals
@@ -168,12 +172,16 @@ class Plotter:
         self.update_point(self.close_signals, "low_close", "low_tick_price", snapshot)
 
         if self.price_time_array.size > 0:
-            self.plot_lines["price_time"].setData(self.price_time_array[:, 1], self.price_time_array[:, 0])
-            snapshot["price_time"] = (self.price_time_array[:, 1], self.price_time_array[:, 0])
+            self.plot_lines["price_time"].setData(
+                self.price_time_array[:, 1], self.price_time_array[:, 0]
+            )
+            snapshot["price_time"] = (
+                self.price_time_array[:, 1],
+                self.price_time_array[:, 0],
+            )
         else:
             self.plot_lines["price_time"].setData([], [])
             snapshot["price_time"] = ([], [])
-        
 
         # 同时缓存当前的坐标轴范围
         snapshot["axis_range"] = {
@@ -195,7 +203,11 @@ class Plotter:
             self.paused = True  # 暂停
 
         tick_price = signals.get(tick_price_key, None)
-        current_x = self.data[self.tick_index, 0]
+        # 根据信号判断使用对应的时间字段：若是低价信号则使用列2，否则使用列0（高价）
+        if "low" in point_key:
+            current_x = self.data[self.tick_index, 2]
+        else:
+            current_x = self.data[self.tick_index, 0]
         if tick_price is not None:
             tick_price = np.array(tick_price)
             x_data = np.full(tick_price.shape, current_x)
@@ -279,13 +291,13 @@ class Plotter:
             num_low = len(slopes_low)
             x_low = np.empty(num_low * 3)
             y_low = np.empty(num_low * 3)
-            x_low[0::3] = data[js_low, 0]
-            x_low[1::3] = data[min(N_low, len(data) - 1), 0] + delta
+            x_low[0::3] = data[js_low, 2]
+            x_low[1::3] = data[min(N_low, len(data) - 1), 2] + delta
             x_low[2::3] = np.nan
-            y_low[0::3] = data[js_low, 2]
+            y_low[0::3] = data[js_low, 3]
             y_low[1::3] = (
-                data[js_low, 2]
-                + (data[min(N_low, len(data) - 1), 0] - data[js_low, 0] + delta)
+                data[js_low, 3]
+                + (data[min(N_low, len(data) - 1), 2] - data[js_low, 2] + delta)
                 * slopes_low
             )
             y_low[2::3] = np.nan

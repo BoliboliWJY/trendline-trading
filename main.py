@@ -51,6 +51,7 @@ def main():
     key = basic_config["key"]
     secret = basic_config["secret"]
     coin_type = basic_config["coin_type"]
+    contract_type = basic_config["contract_type"]
     # aim_time_str = basic_config["aim_time"]
     # total_length = basic_config["total_length"]
     interval = basic_config["interval"]
@@ -137,7 +138,7 @@ def main():
             )
             * 1000
         )
-        index = np.searchsorted(data[:, 5], backtest_calculate_time, side="left")
+        index = np.searchsorted(data[:, 6], backtest_calculate_time, side="left") # 搜索开盘时间前一个点
         index = index - 1
         if index < len(data):
             print(
@@ -150,12 +151,23 @@ def main():
         visual_number = basic_config["visual_number"]
         base_trend_number = index  # 可根据需要固定，也可以用 index
 
-        # 5. 初始化趋势生成器与回测器
-        trend_generator = backtest_calculate_trend_generator(
-            data=data,
-            initial_single_slope=initial_single_slope,
-            calculate_trend=calculate_trend,
+        parquet_filename = f"backtest/tick/BTCUSDT/parquet/{coin_type}_{interval}_{backtest_calculate_time_str}_{backtest_end_time_str}"
+        backtest_tick_price.package_data(
+            data[base_trend_number:, 5], data[base_trend_number:, 6], parquet_filename
         )
+        data = backtest_tick_price.modify_data(
+            data,
+            base_trend_number + 1,
+            parquet_filename,
+            coin_type,
+            interval,
+            length,
+            backtest_start_time,
+            backtest_end_time,
+        )
+
+        # 5. 初始化趋势生成器与回测器
+        trend_generator = backtest_calculate_trend_generator(data=data)
 
         backtester = Backtester(data, type_data, trend_generator, base_trend_number)
         initial_trend_data = backtester.initial_trend_data
@@ -175,6 +187,9 @@ def main():
                 else 1
             )
             cache_len = 1000  # 缓存长度
+            if base_trend_number < visual_number:
+                error_msg = f"base_trend_number 小于 visual_number，请检查配置文件"
+                raise ValueError(error_msg)
             plotter = Plotter(
                 data,
                 type_data,
@@ -184,9 +199,6 @@ def main():
                 cache_len,
             )
             base_trend_number += 1
-
-            parquet_filename = f"backtest/tick/BTCUSDT/parquet/{coin_type}_{interval}_2024-11-30_{backtest_end_time_str}_{backtest_calculate_time_str}"
-            # backtest_tick_price.package_data(data[base_trend_number:,5],data[base_trend_number:,6],parquet_filename)
 
             parquet_index = 0
             # start_time = time.time()
