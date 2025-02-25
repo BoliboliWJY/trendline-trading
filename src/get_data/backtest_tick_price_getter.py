@@ -19,7 +19,7 @@ class BacktestTickPriceManager:
 
         self.start_date = datetime.strptime(backtest_start_time, "%Y-%m-%d")
         self.end_date = datetime.strptime(backtest_end_time, "%Y-%m-%d")
-        self.tick_price = self.get_tick_price()
+        # self.tick_price = self.get_tick_price()
 
     def get_tick_price(self):
         self.months = []

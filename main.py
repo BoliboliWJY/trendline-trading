@@ -157,11 +157,15 @@ def main():
             calculate_trend=calculate_trend,
         )
 
-        backtester = Backtester(data,type_data,trend_generator,base_trend_number)
+        backtester = Backtester(data, type_data, trend_generator, base_trend_number)
         initial_trend_data = backtester.initial_trend_data
-        initial_filtered_trend_data = trend_filter(initial_trend_data,data,trend_config).result
-        
-        
+        # 创建 trend_filter 实例
+        filter_trend = trend_filter(data,trend_config)
+        # 使用实例调用方法
+        initial_filtered_trend_data = filter_trend.filter_trend_initial(
+            initial_trend_data["trend_high"],
+            initial_trend_data["trend_low"],
+        )
 
         # 6. 根据配置决定是否可视化
         if visualize_mode:
@@ -172,7 +176,12 @@ def main():
             )
             cache_len = 1000  # 缓存长度
             plotter = Plotter(
-                data, type_data, initial_filtered_trend_data, base_trend_number, visual_number, cache_len
+                data,
+                type_data,
+                initial_filtered_trend_data,
+                base_trend_number,
+                visual_number,
+                cache_len,
             )
             base_trend_number += 1
 
@@ -191,10 +200,22 @@ def main():
                         time.sleep(0.05)
 
                     # price_time_array = backtest_tick_price.yield_prices_from_filtered_data(data[base_trend_number,5],data[base_trend_number,6])
-                    price_time_array = backtest_tick_price.package_data_loader(parquet_index,parquet_filename)
+                    price_time_array = backtest_tick_price.package_data_loader(
+                        parquet_index, parquet_filename
+                    )
                     parquet_index += 1
-
-                    plotter.update_plot(current_trend, signals, close_signals, base_trend_number, price_time_array)
+                    filtered_trend_data = filter_trend.process_new_trend(
+                        initial_filtered_trend_data,
+                        current_trend,
+                    )
+                    # filtered_trend_data = trend_filter(current_trend,data,trend_config).result
+                    plotter.update_plot(
+                        filtered_trend_data,
+                        signals,
+                        close_signals,
+                        base_trend_number,
+                        price_time_array,
+                    )
                     plotter.run()
 
                     base_trend_number += 1

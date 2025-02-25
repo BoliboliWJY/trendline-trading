@@ -50,7 +50,7 @@ class Plotter:
         self.plot.getViewBox().setBackgroundColor("k")
 
         # 控制器
-        self.paused = True  # 是否暂停
+        self.paused = False  # 是否暂停
         from src.plotter.plot_controller import PlotController
 
         self.controller = PlotController(self)
@@ -74,7 +74,7 @@ class Plotter:
         y_min = np.min(data_slice[:, 1:3])
         y_max = np.max(data_slice[:, 1:3])
         self.plot.setXRange(x_min, x_max + self.visual_number * 0.05 * x_interval)
-        self.plot.setYRange(y_min, y_max)
+        self.plot.setYRange(y_min / 1.001, y_max * 1.001)
 
     def initial_plot(self):
         self.signals = {}
