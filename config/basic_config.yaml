@@ -11,7 +11,7 @@ contract_type: 'USD_margined'
 interval: '3m'
 
 visualize_mode: True
-visual_number: 1000
+visual_number: 500
 
 # 设定运行模式:1为实测，0为回测
 run_type: 0
@@ -24,18 +24,18 @@ backtest_config:
 
 # 过滤趋势配置参数
 trend_config:
-  enable_filter: False # 是否启用过滤
-  delay: 9                    # 生成延迟
+  enable_filter: True # 是否启用过滤
+  delay: 2                    # 生成延迟, 2为无延迟
   interval: '3m'              # 注意此处与顶层 interval 保持一致，可在代码中转换成毫秒
   filter_reverse: True     # 反转限制: False 表示不过滤
   filter_slope: False        # 斜率大小限制: False 表示不过滤
   slope_threshold: 0.0001       # 最大斜率阈值
-  filter_line_age: True       # 趋势年龄限制
+  filter_line_age: False       # 趋势年龄限制
   min_line_age: 100          # 最小趋势年龄阈值
-  filter_distance: True       # 距离限制，不能太近
+  filter_distance: False       # 距离限制，不能太近
   distance_threshold: 200     # 最小距离阈值
   filter_trending_line: True  # 处于趋势之中的线不考虑
-  filter_trending_line_number: 10  # 连接当前点趋势的线数量阈值
+  filter_trending_line_number: 5  # 连接当前点趋势的线数量阈值
 
 # 交易策略配置参数
 trading_config:

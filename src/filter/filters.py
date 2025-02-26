@@ -303,12 +303,8 @@ class trend_filter:
         if not self.config.get("enable_filter", False):
             return current_trend
         
-        filtered_trend_data["trend_high"].append(
-            list(current_trend["trend_high"][-self.config.get("delay", 10)])
-        )
-        filtered_trend_data["trend_low"].append(
-            list(current_trend["trend_low"][-self.config.get("delay", 10)])
-        )
+        filtered_trend_data["trend_high"].append(current_trend["trend_high"][-self.config.get("delay", 10)])
+        filtered_trend_data["trend_low"].append(current_trend["trend_low"][-self.config.get("delay", 10)])
 
         # 过滤趋势
         filtered_trend_data = self.filter_trend(
