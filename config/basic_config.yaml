@@ -7,7 +7,7 @@ coin_type: 'BTCUSDT'
 # total_length: 60000
 # aim_time: '2024-8-1  19:30:00'
 # total_length: 100000
-interval: '3m'
+interval: '5m'
 
 visualize_mode: True
 visual_number: 200
@@ -23,8 +23,8 @@ backtest_config:
 # 过滤趋势配置参数
 trend_config:
   enable_filter: True # 是否启用过滤
-  delay: 1                    # 生成延迟
-  interval: '3m'              # 注意此处与顶层 interval 保持一致，可在代码中转换成毫秒
+  delay: 10                    # 生成延迟
+  interval: '5m'              # 注意此处与顶层 interval 保持一致，可在代码中转换成毫秒
   filter_reverse: False      # 反转限制: False 表示不过滤
   filter_slope: False        # 斜率大小限制: False 表示不过滤
   slope_threshold: 0.0001       # 最大斜率阈值
@@ -40,13 +40,13 @@ trading_config:
   open_times: 2 # 限定单k线开仓次数
   # 0.01就是1%
   fee: 0.001 # 手续费
-  stop_loss: 0.003 # 止损
+  stop_loss: 0.007 # 止损
   # take_profit: 0.001 # 止盈
   
   enter_threshold: 0.0005 # 趋势线对应价格与当前价格差距
   leave_threshold: 0.001 # 离开趋势线后，价格与趋势线对应价格差距
   number: 1 # 小于阈值的趋势线数量
-  potential_profit: 0.03 # 潜在利润
+  potential_profit: 0.02 # 潜在利润
 
   trailing_profit_threshold: 0.004 # 移动止损开启利润空间阈值
   trailing_stop_loss: 0.003 # 移动止损可接受的反弹值
