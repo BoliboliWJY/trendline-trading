@@ -76,16 +76,18 @@ class Plotter:
         y_min = np.min([np.min(data_slice[:, 1]), np.min(data_slice[:, 3])])
         y_max = np.max([np.max(data_slice[:, 1]), np.max(data_slice[:, 3])])
         self.plot.setXRange(x_min, x_max + self.visual_number * 0.05 * x_interval)
-        self.plot.setYRange(y_min / 1.001, y_max * 1.001)
+        self.plot.setYRange(y_min / 1.01, y_max * 1.01)
 
     def initial_plot(self):
         self.signals = {}
         self.close_signals = {}
         self.price_time_array = np.array([])
+        self.trend_price_high = None
+        self.trend_price_low = None
         self.plot_in_one()
 
     def update_plot(
-        self, current_trend, signals, close_signals, tick_index, price_time_array
+        self, current_trend, signals, close_signals, tick_index, price_time_array, trend_price
     ):
         self.trend_high = current_trend["trend_high"]
         self.trend_low = current_trend["trend_low"]
@@ -93,6 +95,8 @@ class Plotter:
         self.close_signals = close_signals
         self.tick_index = tick_index
         self.price_time_array = price_time_array
+        self.trend_price_high = trend_price["trend_price_high"]
+        self.trend_price_low = trend_price["trend_price_low"]
         self.current_data = self.data[
             self.start_index
             + self.frame_count : self.start_index
@@ -182,6 +186,33 @@ class Plotter:
         else:
             self.plot_lines["price_time"].setData([], [])
             snapshot["price_time"] = ([], [])
+            
+        if self.trend_price_high is not None:
+            x_trend_price_high = self.trend_price_high[:, 0]
+            y_trend_price_high = self.trend_price_high[:, 1]
+            self.plot_lines["trend_price_high"].setData(x_trend_price_high, y_trend_price_high)
+            snapshot["trend_price_high"] = (x_trend_price_high, y_trend_price_high)
+            
+            # if len(x_trend_price_high) > 100:
+            #     self.paused = True
+        else:
+            self.plot_lines["trend_price_high"].setData([], [])
+            snapshot["trend_price_high"] = ([], [])
+            # self.paused = True
+
+        if self.trend_price_low is not None:
+            x_trend_price_low = self.trend_price_low[:, 0]
+            y_trend_price_low = self.trend_price_low[:, 1]
+            self.plot_lines["trend_price_low"].setData(x_trend_price_low, y_trend_price_low)
+            snapshot["trend_price_low"] = (x_trend_price_low, y_trend_price_low)
+            
+            # if len(x_trend_price_low) > 100:
+            #     self.paused = True
+        else:
+            self.plot_lines["trend_price_low"].setData([], [])
+            snapshot["trend_price_low"] = ([], [])
+            # self.paused = True
+        
 
         # 同时缓存当前的坐标轴范围
         snapshot["axis_range"] = {

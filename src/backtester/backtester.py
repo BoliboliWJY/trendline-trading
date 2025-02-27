@@ -1,9 +1,10 @@
 import time
 from src.utils import profile_method
 
+
 # Import other dependencies from src as needed:
 from src.trend_calculator.compute_initial_trends import compute_initial_trends
-
+from src.trend_calculator.trend_generator import backtest_calculate_trend_generator
 
 class Backtester:
     """历史数据回测器，但不再过滤趋势，直接输出未过滤的趋势以及每次被删除的趋势
@@ -20,12 +21,11 @@ class Backtester:
         self,
         data,
         type_data,
-        trend_generator,
         base_trend_number=1000,
     ):
         self.data = data
         self.type_data = type_data
-        self.trend_generator = trend_generator
+        self.trend_generator = backtest_calculate_trend_generator(data=data)
         self.base_trend_number = base_trend_number  # 前置趋势数量
 
         # 趋势管理

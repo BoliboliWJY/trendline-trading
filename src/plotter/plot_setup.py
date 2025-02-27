@@ -89,5 +89,12 @@ def setup_plot_lines(plot, visual_number):
     plot_lines["price_time"] = plot.plot(
         [], [], pen=None, symbol="o", symbolBrush="white", symbolSize=10, name="Price Time"
     )
+    
+    plot_lines["trend_price_high"] = plot.plot(
+        [], [], pen=None, symbol="o", symbolBrush="green", symbolSize=10, name="Trend Price High"
+    )
+    plot_lines["trend_price_low"] = plot.plot(
+        [], [], pen=None, symbol="o", symbolBrush="red", symbolSize=10, name="Trend Price Low"
+    )
 
     return plot_lines, plot_configs

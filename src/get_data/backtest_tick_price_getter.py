@@ -126,12 +126,23 @@ class BacktestTickPriceManager:
 
     def package_data_loader(self, chunk_index: int, base_filename: str):
         """
-        读取 package_data 打包的数据
+        读取 package_data 打包的数据，并过滤掉相邻时间点中价格相同的记录
         """
         filename = f"{base_filename}_chunk_{chunk_index}.parquet"
         try:
-            loaded_df = pl.read_parquet(filename).select(["price", "time"]).to_numpy()
-            return loaded_df
+            # 先读取数据并选取 "price" 和 "time" 列
+            df = pl.read_parquet(filename).select(["price", "time"])
+            data = df.to_numpy()
+
+            # 如果数据量不为0，则构造布尔掩码来过滤相邻价格相同的记录
+            if data.shape[0] > 0:
+                # 第一个数据点保留；后续数据点与前一个数据点的价格不同则保留
+                mask = np.concatenate(([True], data[1:, 0] != data[:-1, 0]))
+                filtered_data = data[mask]
+            else:
+                filtered_data = data
+
+            return filtered_data
         except FileNotFoundError:
             print(f"Error: 文件 {filename} 未找到。")
             return None
@@ -162,17 +173,22 @@ class BacktestTickPriceManager:
         # 如果 data 中对应位置的时间一致，则跳过后续处理。
         try:
             first_chunk_filename = f"{base_filename}_chunk_0.parquet"
-            df_check = pl.read_parquet(first_chunk_filename)
-            arr_check = df_check.select(["price", "time"]).to_numpy()
-            if arr_check.shape[0] > 0:
-                first_max_index = np.argmax(arr_check[:, 0])
-                first_max_time = arr_check[first_max_index, 1]
-                # 假设第一组的数据在 data 中的索引为 base_trend_number
-                if data[base_trend_number, 0] == first_max_time:
-                    print("数据已经处理过，跳过修改。")
-                    return data
+            print(f"尝试读取文件: {first_chunk_filename}")  # 添加调试信息
+            if os.path.exists(first_chunk_filename):  # 检查文件是否存在
+                print(f"文件存在: {first_chunk_filename}")
+                df_check = pl.read_parquet(first_chunk_filename)
+                arr_check = df_check.select(["price", "time"]).to_numpy()
+                if arr_check.shape[0] > 0:
+                    first_max_index = np.argmax(arr_check[:, 0])
+                    first_max_time = arr_check[first_max_index, 1]
+                    # 假设第一组的数据在 data 中的索引为 base_trend_number
+                    if data[base_trend_number, 0] == first_max_time:
+                        print("数据已经处理过，跳过修改。")
+                        return data
+                else:
+                    print(f"Warning: 文件 {first_chunk_filename} 为空，无法验证是否已处理")
             else:
-                print(f"Warning: 文件 {first_chunk_filename} 为空，无法验证是否已处理")
+                print(f"文件不存在: {first_chunk_filename}")  # 添加调试信息
         except Exception as e:
             print(f"检查数据是否已处理时发生错误: {e}")
 

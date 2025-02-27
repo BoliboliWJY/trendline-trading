@@ -20,7 +20,7 @@ def update_trend_high(data, trend_high, current_idx, i, current_slope, deleted_h
         prev_index = trend_high[i][j][1]
         prev_time, prev_value = data[prev_index, [0, 1]]
         slope = (current_value - prev_value) / (current_time - prev_time)
-        deleted_high.append((i, list(trend_high[i][j])))
+        deleted_high.append([i, list(trend_high[i][j])])
         del trend_high[i][j]
         trend_high[current_idx].add((slope, prev_index))
         update_trend_high(data, trend_high, current_idx, prev_index, slope, deleted_high)
@@ -34,7 +34,7 @@ def update_trend_low(data, trend_low, current_idx, i, current_slope, deleted_low
         prev_index = trend_low[i][j][1]
         prev_time, prev_value = data[prev_index, [2, 3]]
         slope = (current_value - prev_value) / (current_time - prev_time)
-        deleted_low.append((i, list(trend_low[i][j])))
+        deleted_low.append([i, list(trend_low[i][j])])
         del trend_low[i][j]
         trend_low[current_idx].add((slope, prev_index))
         update_trend_low(data, trend_low, current_idx, prev_index, slope, deleted_low)

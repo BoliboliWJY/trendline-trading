@@ -316,16 +316,19 @@ class trend_filter:
         deleted_high = current_trend["deleted_high"]
         deleted_low = current_trend["deleted_low"]
 
-        filtered_trend_high, removed_items_high = self._remove_items(
+        # 过滤删除的趋势,filtered_deleted_high/filtered_deleted_low 为同时满足过滤且删除的趋势
+        filtered_trend_high, filtered_deleted_high = self._remove_items(
             filtered_trend_data["trend_high"], deleted_high
         )
-        filtered_trend_low, removed_items_low = self._remove_items(
+        filtered_trend_low, filtered_deleted_low = self._remove_items(
             filtered_trend_data["trend_low"], deleted_low
         )
 
         filtered_trend = {
             "trend_high": filtered_trend_high,
             "trend_low": filtered_trend_low,
+            "deleted_high": filtered_deleted_high,
+            "deleted_low": filtered_deleted_low,
         }
         return filtered_trend
 
@@ -335,7 +338,7 @@ class trend_filter:
             if idx < len(filtered_list):
                 try:
                     filtered_list[idx].remove(item_to_delete)
-                    removed_items.append([item_to_delete])
+                    removed_items.append([idx, item_to_delete])
                 except ValueError:
                     pass
         return filtered_list, removed_items
