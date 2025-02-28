@@ -25,83 +25,85 @@ class Trader:
         min_slope = np.inf
         
         # HACK 这段代码很可能有问题，但是目前暂未发现，所以暂时保留，如果什么发现无法找到最近的点，就遗弃使用下方注释代码
-        if (not self.current_highest[0]) or (self.current_highest[0] < base_trend_number - self.delay) or (self.data[self.current_highest[0], 1] < self.data[base_trend_number, 1]):
-            self.current_highest = [[],[]] # 如果当前最高点已经超过delay或者有更大的点出现，则清空
-        if self.current_highest == [[],[]]: # 如果当前最高点为空，则更新
-            self.current_highest[0] = base_trend_number
-            for real_index in range(n_high - 1, -1, -1):
-                x = current_trend["trend_high"][real_index]
-                if not x:
-                    continue
-                if x[0][0] < min_slope:
-                    min_slope = x[0][0]
+        # if (not self.current_highest[0]) or (self.current_highest[0] < base_trend_number - self.delay) or (self.data[self.current_highest[0], 1] < self.data[base_trend_number, 1]):
+        #     self.current_highest = [[],[]] # 如果当前最高点已经超过delay或者有更大的点出现，则清空
+        # if self.current_highest == [[],[]]: # 如果当前最高点为空，则更新
+        #     self.current_highest[0] = base_trend_number
+        #     for real_index in range(n_high - 1, -1, -1):
+        #         x = current_trend["trend_high"][real_index]
+        #         if not x:
+        #             continue
+        #         if x[0][0] < min_slope:
+        #             min_slope = x[0][0]
                     
-                    for value in x:
-                        self.deleted_high.append((real_index, value))
-                        self.current_highest[1].append((real_index, value))
-                    # self.deleted_high.append((real_index, x[0]))
-                    # self.current_highest[1].append((real_index, x[0]))
+        #             for value in x:
+        #                 self.deleted_high.append([real_index, value])
+        #                 self.current_highest[1].append([real_index, value])
+        #             # self.deleted_high.append((real_index, x[0]))
+        #             # self.current_highest[1].append((real_index, x[0]))
                 
-                if x[0][0] < 0:
-                    break
+        #         if x[0][0] < 0:
+        #             break
                 
-        else:
-            for i in range(n_high - 1, n_high - 1 - self.delay, -1):
-                if current_trend["trend_high"][i]:
-                    self.deleted_high.append((i, current_trend["trend_high"][i][0]))
-            self.deleted_high.extend(self.current_highest[1])
+        # else:
+        #     for i in range(n_high - 1, n_high - 1 - self.delay, -1):
+        #         if current_trend["trend_high"][i]:
+        #             self.deleted_high.append((i, current_trend["trend_high"][i][0]))
+        #     self.deleted_high.extend(self.current_highest[1])
+            
         
-        # for real_index in range(n_high - 1, -1, -1):
-        #     x = current_trend["trend_high"][real_index]
-        #     if not x:
-        #         continue
-        #     if x[0][0] < min_slope:
-        #         min_slope = x[0][0]
-        #         # for value in x:
-        #             # self.deleted_high.append((real_index, value))
-        #         self.deleted_high.append((real_index, x[0]))
-        #     if x[0][0] < 0:
-        #         break
+        for real_index in range(n_high - 1, -1, -1):
+            x = current_trend["trend_high"][real_index]
+            if not x:
+                continue
+            if x[0][0] < min_slope:
+                min_slope = x[0][0]
+                # for value in x:
+                    # self.deleted_high.append((real_index, value))
+                self.deleted_high.append((real_index, x[0]))
+            if x[0][0] < 0:
+                break
+            
+        
+
+
 
         self.deleted_low = current_trend["deleted_low"]
         n_low = len(current_trend["trend_low"])
         min_slope = -np.inf
         
-        if (not self.current_lowest[0]) or (self.current_lowest[0] < base_trend_number - self.delay) or (self.data[self.current_lowest[0], 3] > self.data[base_trend_number, 3]):
-            self.current_lowest = [[],[]]
-        if self.current_lowest == [[],[]]:
-            self.current_lowest[0] = base_trend_number
-            for real_index in range(n_low - 1, -1, -1):
-                x = current_trend["trend_low"][real_index]
-                if not x:
-                    continue
-                if x[-1][0] > min_slope:
-                    min_slope = x[-1][0]
-                    for value in x:
-                        self.deleted_low.append((real_index, value))
-                        self.current_lowest[1].append((real_index, value))
-                if x[-1][0] > 0:
-                    break
-        else:
-            for i in range(n_low - 1, n_low - 1 - self.delay, -1):
-                if current_trend["trend_low"][i]:
-                    self.deleted_low.append((i, current_trend["trend_low"][i][-1]))
-            self.deleted_low.extend(self.current_lowest[1])
+        # if (not self.current_lowest[0]) or (self.current_lowest[0] < base_trend_number - self.delay) or (self.data[self.current_lowest[0], 3] > self.data[base_trend_number, 3]):
+        #     self.current_lowest = [[],[]]
+        # if self.current_lowest == [[],[]]:
+        #     self.current_lowest[0] = base_trend_number
+        #     for real_index in range(n_low - 1, -1, -1):
+        #         x = current_trend["trend_low"][real_index]
+        #         if not x:
+        #             continue
+        #         if x[-1][0] > min_slope:
+        #             min_slope = x[-1][0]
+        #             for value in x:
+        #                 self.deleted_low.append([real_index, value])
+        #                 self.current_lowest[1].append([real_index, value])
+        #         if x[-1][0] > 0:
+        #             break
+        # else:
+        #     for i in range(n_low - 1, n_low - 1 - self.delay, -1):
+        #         if current_trend["trend_low"][i]:
+        #             self.deleted_low.append([i, current_trend["trend_low"][i][-1]])
+        #     self.deleted_low.extend(self.current_lowest[1])
         
-        
-        
-        
-        # for real_index in range(n_low - 1, -1, -1):
-        #     x = current_trend["trend_low"][real_index]
-        #     if not x:
-        #         continue
-        #     if x[-1][0] > min_slope:
-        #         min_slope = x[-1][0]
-        #         # for value in x:
-        #         #     self.deleted_low.append([real_index, value])
-        #         self.deleted_low.append((real_index, x[-1]))
-        #     if x[-1][0] > 0:
-        #         break
+        for real_index in range(n_low - 1, -1, -1):
+            x = current_trend["trend_low"][real_index]
+            if not x:
+                continue
+            if x[-1][0] > min_slope:
+                min_slope = x[-1][0]
+                # for value in x:
+                #     self.deleted_low.append([real_index, value])
+                self.deleted_low.append((real_index, x[-1]))
+            if x[-1][0] > 0:
+                break
         
         self.trend_price = self.calculate_trend_price_by_trend()
         # 计算趋势价格
