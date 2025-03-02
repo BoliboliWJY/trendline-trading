@@ -3,154 +3,192 @@ from src.utils import profile_method
 
 # @profile_method
 class Trader:
-    def __init__(self,data:np.ndarray, trend_config:dict, trading_config:dict):
+    def __init__(self,data:np.ndarray, trend_config:dict, trading_config:dict, plotter):
         self.data = data
         self.trend_config = trend_config
         self.trading_config = trading_config
+        self.plotter = plotter
         
-        self.current_highest = [[],[]]
-        self.current_lowest = [[],[]]
-    
-    
-    def calculate_trend_price(self, data:np.ndarray, base_trend_number:int, current_trend:dict):
+        self.open_potential_signal = False # 潜在开仓信号，需要具体对tick分析
+        self.buy_open_potential_signal = False # 潜在买入开仓信号
+        self.sell_open_potential_signal = False # 潜在卖出开仓信号
+        
+        self.close_potential_signal = False # 潜在平仓信号，需要具体对tick分析
+        
+        self.paused = False # 是否暂停可视化更新
+        
+    def open_close_signal(self,max_min_price:np.ndarray, trend_price:np.ndarray, price_time_array:np.ndarray):
         """
-        计算趋势价格（优化版：避免切片复制）
+        根据趋势价格和价格时间数组，生成开仓和平仓信号
         """
-        self.delay = self.trend_config["delay"] - 2
-        self.data = data
-        self.current_tick = self.data[base_trend_number, -1]
-        self.trend_high = current_trend["trend_high"]
-        self.trend_low = current_trend["trend_low"]
+        self.max_price = max_min_price[0]
+        self.min_price = max_min_price[1]
+        # trend_price_high = trend_price["trend_price_high"]
+        # trend_price_low = trend_price["trend_price_low"]
+        trend_high = trend_price["trend_high"] # 趋势线斜率，截距
+        trend_low = trend_price["trend_low"]
+        trend_price_high = trend_price["trend_price_high"] # 对应k线下的价格
+        trend_price_low = trend_price["trend_price_low"]
+        price_time_array = price_time_array
+        time = price_time_array[:, 0]
         
-        self.deleted_high = current_trend["deleted_high"]
-        n_high = len(current_trend["trend_high"])
-        min_slope = np.inf
+        # trend_price_high_tick = self.compute_trend_price(trend_high, time) # 对应tick下的价格
+        # trend_price_low_tick = self.compute_trend_price(trend_low, time)
         
-        # HACK 这段代码很可能有问题，但是目前暂未发现，所以暂时保留，如果什么发现无法找到最近的点，就遗弃使用下方注释代码
-        new_entries = [[idx, self.trend_high[j][0]]
-                       for idx, (slope, j) in self.deleted_high
-                       if self.trend_high[j]]
-        # 一次性将新数据追加到 deleted_high 中
-        self.deleted_high.extend(new_entries)
-        if (not self.current_highest[0]) or (self.current_highest[0] < base_trend_number - self.delay) or (self.data[self.current_highest[0], 1] < self.data[base_trend_number, 1]):
-            self.current_highest = [[],[]] # 如果当前最高点已经超过delay或者有更大的点出现，则清空
-        if self.current_highest == [[],[]]: # 如果当前最高点为空，则更新
-            self.current_highest[0] = base_trend_number
-            for real_index in range(n_high - 1, -1, -1):
-                x = current_trend["trend_high"][real_index]
-                if not x:
-                    continue
-                if x[0][0] < min_slope:
-                    min_slope = x[0][0]
+        if not self.open_potential_signal:
+            # 做空进入阈值
+            sell_enter_val = 1 - self.max_price / trend_price_high[0, 1] if trend_price_high.size > 0 else self.trading_config["enter_threshold"] + 1
+            # 做空潜在利润值
+            sell_profit_val = 1 - trend_price_low[0, 1] / self.max_price if trend_price_low.size > 0 else 1
+            # 做多进入阈值
+            buy_enter_val = 1 - trend_price_low[0, 1] / self.min_price if trend_price_low.size > 0 else self.trading_config["enter_threshold"] + 1
+            # 做多潜在利润值
+            buy_profit_val = 1 - self.min_price / trend_price_high[0, 1] if trend_price_high.size > 0 else 1
+            
+            if sell_enter_val < self.trading_config["enter_threshold"] and sell_profit_val > self.trading_config["potential_profit"]:
+                print("出现潜在卖出开仓信号, 进入阈值/打破趋势线")
+                # self.paused = True
+                # self.open_potential_signal = True
+                # self.sell_open_potential_signal = True
+                # self.buy_open_potential_signal = False
+            elif buy_enter_val < self.trading_config["enter_threshold"] and buy_profit_val > self.trading_config["potential_profit"]:
+                print("出现潜在买入开仓信号, 进入阈值/打破趋势线")
+                # self.paused = True
+                # self.open_potential_signal = True
+                # self.buy_open_potential_signal = True
+                # self.sell_open_potential_signal = False
+            else:
+                self.paused = False
+                self.open_potential_signal = False
+                self.buy_open_potential_signal = False
+                self.sell_open_potential_signal = False
+        
+        # # 先判断新k先是否有潜在开仓情况（有没有进入趋势线阈值范围内）
+        # if not self.open_potential_signal: # BUG 有问题，到非邻近的k线这里却也被保留了状态
+        #     if (
+        #         1 - self.max_price / trend_price_high[0, 1] < self.trading_config["enter_threshold"] and
+        #         1 - trend_price_low[0, 1] / self.max_price > self.trading_config["potential_profit"]
+        #     ): # 出现潜在卖出开仓信号
+        #         # print("出现潜在卖出开仓信号")
+        #         self.open_potential_signal = True
+        #         self.sell_open_potential_signal = True
+        #         self.buy_open_potential_signal = False
+        #     elif (1 - trend_price_low[0, 1] / self.min_price < self.trading_config["enter_threshold"] and
+        #           1 - self.min_price / trend_price_high[0, 1] > self.trading_config["potential_profit"]
+        #     ): # 出现潜在买入开仓信号
+        #         print("出现潜在买入开仓信号")
+        #         self.open_potential_signal = True
+        #         self.buy_open_potential_signal = True
+        #         self.sell_open_potential_signal = False
+        #     else:
+        #         # print("没有出现潜在开仓信号")
+        #         self.open_potential_signal = False
+        #         self.buy_open_potential_signal = False
+        #         self.sell_open_potential_signal = False
+                
+        # if self.open_potential_signal: # 如果存在潜在开仓信号，则进行tick级别搜索
+        #     if self.buy_open_potential_signal: # 如果存在潜在买入开仓信号
+        #         for open_buy_signal in self.judge_buy_open_tick(trend_price_low, price_time_array):
+        #             if open_buy_signal: # 发现确实反弹，进行买入开仓
+        #                 self.open_buy_signal = False # 重置所有开仓信号
+        #                 self.buy_open_potential_signal = False
+        #                 self.open_potential_signal = False
+        #                 break
+        #     elif self.sell_open_potential_signal: # 如果存在潜在卖出开仓信号
+        #         for open_sell_signal in self.judge_sell_open_tick(trend_price_high, price_time_array):
+        #             if open_sell_signal: # 发现确实反弹，进行卖出开仓
+        #                 self.open_sell_signal = False # 重置所有开仓信号
+        #                 self.sell_open_potential_signal = False
+        #                 self.open_potential_signal = False
+        #                 break
+                
+
+    #     if not self.close_potential_signal:
+    #         # if self.trend_price_low[0, 1] / self.min_price < self.trend_config["leave_threshold"]:
+    #         pass
+        
+    #     pass
+    
+    # def judge_open_signal(self):
+    #     """判断是否有开仓，如果离开了阈值范围，则认为确实反弹，进行开仓
+    #     """
+    #     self.open_sell_signal = False# 卖出开仓信号
+    #     self.open_buy_signal = False# 买入开仓信号
+        
+    #     if self.sell_open_potential_signal: # 如果存在潜在卖出开仓信号
+    #         for open_sell_signal in self.judge_sell_open_tick():
+    #             if open_sell_signal: # 发现确实反弹，进行卖出开仓
+    #                 self.open_sell_signal = False # 重置所有开仓信号
+    #                 self.sell_open_potential_signal = False
+    #                 self.open_potential_signal = False
+    #                 break
+                
+    #     elif self.buy_open_potential_signal: # 如果存在潜在买入开仓信号
+    #         for open_buy_signal in self.judge_buy_open_tick():
+    #             if open_buy_signal: # 发现确实反弹，进行买入开仓
+    #                 self.open_buy_signal = False # 重置所有开仓信号
+    #                 self.buy_open_potential_signal = False
+    #                 self.open_potential_signal = False
+    #                 break
+    
+    def compute_trend_price(self,trend, tick_time):
+        """计算趋势价格"""
+        k = trend[:, 0][:, None]
+        b = trend[:, 1][:, None]
+        result = k * tick_time + b
+        return result
+
+    def judge_sell_open_tick(self, trend_price_high, price_time_array):
+        """卖出开仓"""
+        trend_idx = 0
+        enter_signal = False # 是否进入范围
+        leave_signal = False # 是否离开范围(确实反弹)
+        open_sell_signal = False # 是否开仓
+        for i in range(len(price_time_array)):
+            if not enter_signal: # 如果还未进入范围
+                if self.calculate_rate(price_time_array, trend_price_high, i, trend_idx) < self.trading_config["enter_threshold"]:
+                    enter_signal = True
+            else: # 如果已经进入范围
+                if self.calculate_rate(price_time_array, trend_price_high, i, trend_idx) < 0:# 打破了当前趋势线
+                    enter_signal = False
+                    trend_idx += 1
+                elif self.calculate_rate(price_time_array, trend_price_high, i, trend_idx) > self.trading_config["leave_threshold"]:
+                    leave_signal = True # 离开趋势线阈值范围内
+                    open_sell_signal = True # 卖出开仓信号出现
                     
-                    for value in x:
-                        self.deleted_high.append([real_index, value])
-                        self.current_highest[1].append([real_index, value])
-
+                    yield open_sell_signal
                 
-                if x[0][0] < 0:
-                    break
-        else:
-            for i in range(n_high - 1, n_high - 1 - self.delay, -1):
-                if current_trend["trend_high"][i]:
-                    self.deleted_high.append((i, current_trend["trend_high"][i][0]))
-            self.deleted_high.extend(self.current_highest[1])
             
-        
-
-            
-        
-
-
-
-        self.deleted_low = current_trend["deleted_low"]
-        n_low = len(current_trend["trend_low"])
-        min_slope = -np.inf
-        
-        new_entries = [[idx, self.trend_low[j][-1]] 
-                       for idx, (slope, j) in self.deleted_low 
-                       if self.trend_low[j]]
-        # 一次性将新数据追加到 deleted_low 中
-        self.deleted_low.extend(new_entries)
-        if (not self.current_lowest[0]) or (self.current_lowest[0] < base_trend_number - self.delay) or (self.data[self.current_lowest[0], 3] > self.data[base_trend_number, 3]):
-            self.current_lowest = [[],[]]
-        if self.current_lowest == [[],[]]:
-
-            
-            self.current_lowest[0] = base_trend_number
-            for real_index in range(n_low - 1, -1, -1):
-                x = current_trend["trend_low"][real_index]
-                if not x:
-                    continue
-                if x[-1][0] > min_slope:
-                    min_slope = x[-1][0]
-                    for value in x:
-                        self.deleted_low.append([real_index, value])
-                        self.current_lowest[1].append([real_index, value])
-                if x[-1][0] > 0:
-                    break
-                
-                
-        else:
-            for i in range(n_low - 1, n_low - 1 - self.delay, -1):
-                if current_trend["trend_low"][i]:
-                    self.deleted_low.append([i, current_trend["trend_low"][i][-1]])
-            self.deleted_low.extend(self.current_lowest[1])
-            
+        pass
     
+    def judge_buy_open_tick(self, trend_price_low, price_time_array):
+        """买入开仓"""
+        trend_idx = 0
+        enter_signal = False # 是否进入范围
+        leave_signal = False # 是否离开范围(确实反弹)
+        open_buy_signal = False # 是否开仓
+        for i in range(len(price_time_array)):
+            if not enter_signal: # 如果还未进入范围
+                if self.calculate_rate(trend_price_low, price_time_array, trend_idx, i) < self.trading_config["enter_threshold"]:
+                    enter_signal = True
+                    rate = self.calculate_rate(trend_price_low, price_time_array, trend_idx, i)
+            else: # 如果已经进入范围
+                if self.calculate_rate(trend_price_low, price_time_array, trend_idx, i) < 0:
+                    enter_signal = False
+                    trend_idx += 1
+                elif self.calculate_rate(trend_price_low, price_time_array, trend_idx, i) > self.trading_config["leave_threshold"]:
+                    leave_signal = True # 离开趋势线阈值范围内
+                    open_buy_signal = True # 买入开仓信号出现
+                    print("买入开仓, 相差", rate)
+                    self.plotter.paused = True
+                    
+                    yield open_buy_signal
         
+        
+        pass
+    
+    def calculate_rate(self, low_obj, high_obj, low_idx, high_idx):
+        """计算低点与低趋势之间的价格比值"""
+        return 1 - low_obj[low_idx, 1] / high_obj[high_idx, 1]
 
-        
-        self.trend_price = self.calculate_trend_price_by_trend()
-        # 计算趋势价格
-        
-        return self.trend_price
-        
-        
-    def calculate_trend_price_by_trend(self):
-        """使用矢量化计算趋势价格（优化建议）"""
-        # 计算高点趋势价格
-        if self.deleted_high:
-            # 使用列表推导式分离斜率和起始点，稍作重构使变量命名更清晰
-            slopes_high = np.array([entry[1][0] for entry in self.deleted_high])
-            start_indices_high = np.array([entry[1][1] for entry in self.deleted_high])
-            # 预计算时间差，避免重复计算
-            dt_high = self.current_tick - self.data[start_indices_high, 0]
-            price_from_start = self.data[start_indices_high, 1]
-            trend_price_high = np.column_stack((
-                np.full(slopes_high.shape, self.current_tick),
-                price_from_start + slopes_high * dt_high
-            ))
-            trend_price_high = np.sort(trend_price_high, axis = 0)
-        else:
-            trend_price_high = np.empty((0, 2))
             
-        # if trend_price_high.size:
-        #     # np.unique按整行去重，因为第一列均为当前tick，所以实际上只关注第二列价格是否相同
-        #     unique_high = np.unique(trend_price_high, axis=0)
-        #     order_high = np.argsort(unique_high[:, 1])
-        #     trend_price_high = unique_high[order_high]
-
-        # 计算低点趋势价格
-        if self.deleted_low:
-            slopes_low = np.array([entry[1][0] for entry in self.deleted_low])
-            start_indices_low = np.array([entry[1][1] for entry in self.deleted_low])
-            dt_low = self.current_tick - self.data[start_indices_low, 2]
-            price_from_start = self.data[start_indices_low, 3]
-            trend_price_low = np.column_stack((
-                np.full(slopes_low.shape, self.current_tick),
-                price_from_start + slopes_low * dt_low
-            ))
-            trend_price_low = np.sort(trend_price_low, axis=0)[::-1, :]
-        else:
-            trend_price_low = np.empty((0, 2))
-            
-        # if trend_price_low.size:
-        #     unique_low = np.unique(trend_price_low, axis=0)
-        #     order_low = np.argsort(unique_low[:, 1])[::-1] 
-        #     trend_price_low = unique_low[order_low]
-
-        return {"trend_price_high": trend_price_high, "trend_price_low": trend_price_low}
-    
-    
-    

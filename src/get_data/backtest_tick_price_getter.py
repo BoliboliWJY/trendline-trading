@@ -131,13 +131,13 @@ class BacktestTickPriceManager:
         filename = f"{base_filename}_chunk_{chunk_index}.parquet"
         try:
             # 先读取数据并选取 "price" 和 "time" 列
-            df = pl.read_parquet(filename).select(["price", "time"])
+            df = pl.read_parquet(filename).select(["time", "price"])
             data = df.to_numpy()
 
             # 如果数据量不为0，则构造布尔掩码来过滤相邻价格相同的记录
             if data.shape[0] > 0:
                 # 第一个数据点保留；后续数据点与前一个数据点的价格不同则保留
-                mask = np.concatenate(([True], data[1:, 0] != data[:-1, 0]))
+                mask = np.concatenate(([True], data[1:, 1] != data[:-1, 1]))
                 filtered_data = data[mask]
             else:
                 filtered_data = data

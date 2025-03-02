@@ -51,6 +51,7 @@ class Plotter:
 
         # 控制器
         self.paused = False  # 是否暂停
+        self.enable_visualization = False
         from src.plotter.plot_controller import PlotController
 
         self.controller = PlotController(self)
@@ -116,11 +117,13 @@ class Plotter:
             + self.delay
         ]
         self.frame_count += 1
-        self.set_plot_ranges(self.current_data)
-        self.plot_in_one()
+        
+        if self.enable_visualization:
+            self.set_plot_ranges(self.current_data)
+            self.plot_in_one()
 
-        # 更新FPS
-        self.update_fps()
+            # 更新FPS
+            self.update_fps()
 
     def update_fps(self):
         self.fps_count += 1
@@ -177,11 +180,11 @@ class Plotter:
 
         if self.price_time_array.size > 0:
             self.plot_lines["price_time"].setData(
-                self.price_time_array[:, 1], self.price_time_array[:, 0]
+                self.price_time_array[:, 0], self.price_time_array[:, 1]
             )
             snapshot["price_time"] = (
-                self.price_time_array[:, 1],
                 self.price_time_array[:, 0],
+                self.price_time_array[:, 1],
             )
         else:
             self.plot_lines["price_time"].setData([], [])
