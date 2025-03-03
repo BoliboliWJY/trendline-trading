@@ -27,6 +27,7 @@ class Plotter:
         self.delay = base_trend_number - len(self.trend_high) + 1
 
         self.frame_count = 0  # 帧计数
+        self.save_frame_count = 0 # 保存帧计数
         self.start_index = len(self.trend_high) - self.visual_number  # 绘图起始索引
         self.tick_index = self.start_index
         self.current_data = self.data[
@@ -35,6 +36,8 @@ class Plotter:
         self.current_type = self.type_data[
             self.start_index : self.start_index + self.visual_number + self.delay
         ]
+        
+        self.future_number = int(self.visual_number * 0.25)
 
         self.app = QtWidgets.QApplication(sys.argv)
         self.win = PlotWindow()
@@ -76,15 +79,15 @@ class Plotter:
         # y轴计算时采集高价（列1）和低价（列3）
         y_min = np.min([np.min(data_slice[:, 1]), np.min(data_slice[:, 3])])
         y_max = np.max([np.max(data_slice[:, 1]), np.max(data_slice[:, 3])])
-        self.plot.setXRange(x_min, x_max + self.visual_number * 0.05 * x_interval)
+        self.plot.setXRange(x_min, x_max + self.future_number * x_interval)
         self.plot.setYRange(y_min / 1.01, y_max * 1.01)
 
     def initial_plot(self):
         self.signals = {}
         self.close_signals = {}
         self.price_time_array = np.array([])
-        self.trend_price_high = None
-        self.trend_price_low = None
+        self.trend_price_high = np.array([])
+        self.trend_price_low = np.array([])
         self.plot_in_one()
 
     def update_plot(
@@ -190,7 +193,7 @@ class Plotter:
             self.plot_lines["price_time"].setData([], [])
             snapshot["price_time"] = ([], [])
             
-        if self.trend_price_high is not None:
+        if self.trend_price_high.size > 0:
             x_trend_price_high = self.trend_price_high[:, 0]
             y_trend_price_high = self.trend_price_high[:, 1]
             self.plot_lines["trend_price_high"].setData(x_trend_price_high, y_trend_price_high)
@@ -203,7 +206,7 @@ class Plotter:
             snapshot["trend_price_high"] = ([], [])
             # self.paused = True
 
-        if self.trend_price_low is not None:
+        if self.trend_price_low.size > 0:
             x_trend_price_low = self.trend_price_low[:, 0]
             y_trend_price_low = self.trend_price_low[:, 1]
             self.plot_lines["trend_price_low"].setData(x_trend_price_low, y_trend_price_low)
@@ -215,6 +218,42 @@ class Plotter:
             self.plot_lines["trend_price_low"].setData([], [])
             snapshot["trend_price_low"] = ([], [])
             # self.paused = True
+        
+        # 新增部分：更新预绘制的K线（未来20根）
+        future_start = self.start_index + self.frame_count + self.visual_number + self.delay
+        future_end = future_start + self.future_number
+        if future_start < len(self.data):
+            future_end = min(len(self.data), future_end)
+            future_data = self.data[future_start:future_end]
+            future_type = self.type_data[future_start:future_end]
+            # 处理绿色K线（类型0）
+            indices_green = future_type == 0
+            if np.any(indices_green):
+                filtered_future_green = future_data[indices_green]
+                pairs_green = filtered_future_green[:, [2, 3, 0, 1]].reshape(-1, 4)
+                x_green = pairs_green[:, [0, 2]].flatten()
+                y_green = pairs_green[:, [1, 3]].flatten()
+            else:
+                x_green, y_green = [], []
+            # 处理红色K线（类型1）
+            indices_red = future_type == 1
+            if np.any(indices_red):
+                filtered_future_red = future_data[indices_red]
+                pairs_red = filtered_future_red[:, [2, 3, 0, 1]].reshape(-1, 4)
+                x_red = pairs_red[:, [0, 2]].flatten()
+                y_red = pairs_red[:, [1, 3]].flatten()
+            else:
+                x_red, y_red = [], []
+    
+            self.safe_update_plot_line("pre_high_low_green", x_green, y_green)
+            snapshot["pre_high_low_green"] = (x_green, y_green)
+            self.safe_update_plot_line("pre_high_low_red", x_red, y_red)
+            snapshot["pre_high_low_red"] = (x_red, y_red)
+        else:
+            self.safe_update_plot_line("pre_high_low_green", [], [])
+            snapshot["pre_high_low_green"] = ([], [])
+            self.safe_update_plot_line("pre_high_low_red", [], [])
+            snapshot["pre_high_low_red"] = ([], [])
         
 
         # 同时缓存当前的坐标轴范围
@@ -339,6 +378,16 @@ class Plotter:
             x_low, y_low = [], []
 
         return x_high, y_high, x_low, y_low
+    
+    def save_frame(self, coin_type):
+        import os
+        directory = os.path.join("frames", coin_type)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        filename = os.path.join(directory, f"frame_{self.save_frame_count:06d}.png")
+        image = self.win.plot_widget.grab()
+        image.save(filename)
+        self.save_frame_count += 1
 
     def run(self):
         """

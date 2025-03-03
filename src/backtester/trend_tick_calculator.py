@@ -102,8 +102,11 @@ class TrendTickCalculator:
         self.trend_price_high = self.calculate_trend_klines_price(data, base_trend_number, self.trend_high_intercepts)
         self.trend_price_low = self.calculate_trend_klines_price(data, base_trend_number, self.trend_low_intercepts)
         
-        return {"trend_price_high": self.trend_price_high, "trend_price_low": self.trend_price_low}
-        
+        # 对 high 趋势价格按照第二列（价格）进行升序排序
+        sorted_trend_price_high = self.trend_price_high[self.trend_price_high[:, 1].argsort()]
+        # 对 low 趋势价格按照第二列（价格）进行降序排序
+        sorted_trend_price_low = self.trend_price_low[self.trend_price_low[:, 1].argsort()[::-1]]
+        return {"trend_price_high": sorted_trend_price_high, "trend_price_low": sorted_trend_price_low}
         
         
         
@@ -111,7 +114,7 @@ class TrendTickCalculator:
         """计算对应k线价格
         """
         if trend_intercepts.shape[0] == 0:
-            return None
+            return np.empty((0, 2))
         x = data[base_trend_number, -1]
         y = trend_intercepts[:,0] * x + trend_intercepts[:,1]
         x = np.full(y.shape, x, dtype=float)

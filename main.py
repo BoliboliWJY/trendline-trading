@@ -101,9 +101,9 @@ def main():
         backtest_calculate_time_str = backtest_config["backtest_calculate_time"]
 
         # 获取历史tick数据（回测时段的数据）
-        # backtest_tick_price = BacktestTickPriceManager(
-        #     coin_type, backtest_calculate_time_str, backtest_end_time_str
-        # )
+        backtest_tick_price = BacktestTickPriceManager(
+            coin_type, backtest_calculate_time_str, backtest_end_time_str
+        )
 
         backtest_start_time = int(
             datetime.datetime.strptime(backtest_start_time_str, "%Y-%m-%d")
@@ -155,20 +155,20 @@ def main():
         base_trend_number = index + 1  # 可根据需要固定，也可以用 index
 
         parquet_filename = f"backtest/tick/BTCUSDT/parquet/{coin_type}_{interval}_{backtest_calculate_time_str}_{backtest_end_time_str}"
-        # backtest_tick_price.package_data(
-        #     data[base_trend_number:, 6], data[base_trend_number:, 7], parquet_filename
-        # )
-        # data = backtest_tick_price.modify_data(
-        #     data,
-        #     base_trend_number,
-        #     parquet_filename,
-        #     coin_type,
-        #     interval,
-        #     length,
-        #     backtest_start_time,
-        #     backtest_end_time,
-        # )
-        parquet_index = 0
+        backtest_tick_price.package_data(
+            data[base_trend_number:, 6], data[base_trend_number:, 7], parquet_filename
+        )
+        data = backtest_tick_price.modify_data(
+            data,
+            base_trend_number,
+            parquet_filename,
+            coin_type,
+            interval,
+            length,
+            backtest_start_time,
+            backtest_end_time,
+        )
+        parquet_index = 1
 
         # 初始化回测器
         backtester = Backtester(data, type_data, base_trend_number)
@@ -185,7 +185,7 @@ def main():
         trend_tick_calculator = TrendTickCalculator(data, trend_config, initial_filtered_trend_data)
         
         # # 初始化交易器
-        # trader = Trader(data, trend_config, trading_config, plotter)
+        trader = Trader(data, trend_config, trading_config)
 
         # 6. 根据配置决定是否可视化
         if visualize_mode:
@@ -202,7 +202,7 @@ def main():
                 cache_len,
             )
             # 初始化交易器
-            trader = Trader(data, trend_config, trading_config, plotter)
+            # trader = Trader(data, trend_config, trading_config, plotter)
             
             base_trend_number += 1
             # start_time = time.time()
@@ -226,7 +226,7 @@ def main():
                     )
                     
                     # 计算趋势价格
-                    trend_tick_data = trend_tick_calculator.update_trend_data(data, base_trend_number - 1, filtered_trend_data)
+                    trend_tick_data = trend_tick_calculator.update_trend_data(data, base_trend_number, filtered_trend_data)
                     
                     # 获取价格时间数组
                     price_time_array = backtest_tick_price.package_data_loader(
@@ -234,8 +234,15 @@ def main():
                     )
                     parquet_index += 1
                     
-                    # trader.open_close_signal(data[base_trend_number,[1,3]],trend_tick_data, price_time_array)
-                    plotter.enable_visualization = True
+                    trader.open_close_signal(data[base_trend_number,[1,3]],trend_tick_data, price_time_array)
+                    
+                    
+                    if trader.paused:
+                        plotter.enable_visualization = True
+                    else:
+                        plotter.enable_visualization = False
+                    
+                    # plotter.enable_visualization = True
                     # price_time_array = np.array([])
                     plotter.update_plot(
                         filtered_trend_data,
@@ -245,25 +252,14 @@ def main():
                         price_time_array,
                         trend_tick_data,
                     )
+                    
                     plotter.run()
+                    
+                    if plotter.enable_visualization:
+                        plotter.save_frame(coin_type)
 
                     base_trend_number += 1
-                    
-                    
-                    # if trader.paused:
-                    #     plotter.paused = True
-                    #     plotter.enable_visualization = True
-                    # else:
-                    #     plotter.paused = False
-                    #     plotter.enable_visualization = False
-                    
-                    
-                    idx_draw += 1
-                    if idx_draw > 755: # 每100个趋势绘制一次
-                        idx_draw = 0
-                        plotter.enable_visualization = True
-                        print((lambda f, arr: sum(1 + f(f, x) for x in arr if isinstance(x, (list, tuple, np.ndarray)) and len(x) > 0))(lambda f, arr: sum(1 + f(f, x) for x in arr if isinstance(x, (list, tuple, np.ndarray)) and len(x) > 0), filtered_trend_data["trend_high"])+(lambda f, arr: sum(1 + f(f, x) for x in arr if isinstance(x, (list, tuple, np.ndarray)) and len(x) > 0))(lambda f, arr: sum(1 + f(f, x) for x in arr if isinstance(x, (list, tuple, np.ndarray)) and len(x) > 0), filtered_trend_data["trend_low"]))                    # else:
-                    #     plotter.enable_visualization = False
+
 
                     pbar.update(1)
 
@@ -276,8 +272,6 @@ def main():
             # start_time = time.time()
             with tqdm(desc="Backtesting Progress", mininterval=1) as pbar:
                 for current_trend in backtester.run_backtest():
-                    signals = {}
-                    close_signals = {}
                     
                     # 过滤趋势
                     filtered_trend_data = filter_trend.process_new_trend(
@@ -286,21 +280,21 @@ def main():
                     )
                     
                     # 计算趋势价格
-                    trend_tick_data = trend_tick_calculator.update_trend_data(data, base_trend_number - 1, filtered_trend_data)
+                    trend_tick_data = trend_tick_calculator.update_trend_data(data, base_trend_number, filtered_trend_data)
                     
                     # 获取价格时间数组
-                    # price_time_array = backtest_tick_price.package_data_loader(
-                    #     parquet_index, parquet_filename
-                    # )
-                    # parquet_index += 1
+                    price_time_array = backtest_tick_price.package_data_loader(
+                        parquet_index, parquet_filename
+                    )
+                    parquet_index += 1
                     
-                    # trader.open_close_signal(data[base_trend_number,[1,3]],trend_tick_data, price_time_array)
+                    trader.open_close_signal(data[base_trend_number,[1,3]],trend_tick_data, price_time_array)
+                    
+                    
 
 
                     base_trend_number += 1
 
-                    
-                
 
                     pbar.update(1)
 

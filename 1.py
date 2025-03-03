@@ -1,28 +1,15 @@
 import numpy as np
-def flatten_to_array(trend_high):
+
+def find_first_less_than(arr: np.ndarray, threshold: float) -> int:
     """
-    先过滤掉空的子数组，然后利用 np.concatenate 将非空子数组拼接成一个一维数组。
-    假设 trend_high 中的每个非空子数组都是 NumPy 数组。
+    返回第一个小于 threshold 的元素的索引，如果没有符合条件的元素，则返回 -1
     """
-    filtered = [sub for sub in trend_high if sub.size > 0]
-    if filtered:
-        return np.concatenate(filtered)
-    else:
-        return np.array([])
+    indices = np.where(arr < threshold)[0]
+    return indices[0] if indices.size > 0 else -1
+
+# 示例:
 if __name__ == "__main__":
-    # 示例：构造一些数据。这里假设每个子数组都是 NumPy 数组。
-    trend_high = []
-    import random
-    for _ in range(30000):
-        if random.random() < (5000 / 30000):
-            # 生成随机长度为1到3的 NumPy 数组
-            sub = np.arange(random.randint(1, 3))
-        else:
-            sub = np.array([])
-        trend_high.append(sub)
-    import time
-    start = time.time()
-    flat_array = flatten_to_array(trend_high)
-    end = time.time()
-    print("扁平化后 NumPy 数组长度（约）：", flat_array.shape[0])
-    print("处理耗时: {:.6f} 秒".format(end - start))
+    arr = np.array([5, 6, 8, 3, 2])
+    threshold = 4
+    index = find_first_less_than(arr, threshold)
+    print("第一个小于 {} 的元素索引为: {}".format(threshold, index))

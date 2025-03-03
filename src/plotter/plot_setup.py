@@ -96,5 +96,11 @@ def setup_plot_lines(plot, visual_number):
     plot_lines["trend_price_low"] = plot.plot(
         [], [], pen=None, symbol="o", symbolBrush="red", symbolSize=10, name="Trend Price Low"
     )
+    
+    # 提前绘制一些k线
+    pre_pen_green = pg.mkPen(color=(0, 255, 0, 100), width=linewidth, style=QtCore.Qt.SolidLine)
+    pre_pen_red   = pg.mkPen(color=(255, 0, 0, 100), width=linewidth, style=QtCore.Qt.SolidLine)
+    plot_lines["pre_high_low_green"] = plot.plot([], [], pen=pre_pen_green, connect="pairs", name="Pre High Low Green")
+    plot_lines["pre_high_low_red"]   = plot.plot([], [], pen=pre_pen_red, connect="pairs", name="Pre High Low Red")
 
     return plot_lines, plot_configs
