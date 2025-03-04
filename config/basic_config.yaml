@@ -11,7 +11,7 @@ contract_type: 'USD_margined'
 interval: '5m'
 
 visualize_mode: True
-visual_number: 130
+visual_number: 200
 
 # 设定运行模式:1为实测，0为回测
 run_type: 0
@@ -49,7 +49,7 @@ trading_config:
   enter_threshold: 0.001 # 趋势线对应价格与当前价格差距
   leave_threshold: 0.005 # 离开趋势线后，价格与趋势线对应价格差距
   number: 1 # 小于阈值的趋势线数量
-  potential_profit: 0.03 # 潜在利润
+  potential_profit: 0.01 # 潜在利润
 
   trailing_profit_threshold: 0.004 # 移动止损开启利润空间阈值
   trailing_stop_loss: 0.003 # 移动止损可接受的反弹值

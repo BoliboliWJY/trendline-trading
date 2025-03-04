@@ -37,7 +37,7 @@ class Plotter:
             self.start_index : self.start_index + self.visual_number + self.delay
         ]
         
-        self.future_number = int(self.visual_number * 0.25)
+        self.future_number = int(self.visual_number * 0.35)
 
         self.app = QtWidgets.QApplication(sys.argv)
         self.win = PlotWindow()
@@ -83,19 +83,19 @@ class Plotter:
         self.plot.setYRange(y_min / 1.01, y_max * 1.01)
 
     def initial_plot(self):
-        self.signals = {}
-        self.close_signals = {}
+        self.open_signals = {"high_open":[], "low_open":[]}
+        self.close_signals = {"high_close":[], "low_close":[]}
         self.price_time_array = np.array([])
         self.trend_price_high = np.array([])
         self.trend_price_low = np.array([])
         self.plot_in_one()
 
     def update_plot(
-        self, current_trend, signals, close_signals, tick_index, price_time_array, trend_price
+        self, current_trend, open_signals, close_signals, tick_index, price_time_array, trend_price
     ):
         self.trend_high = current_trend["trend_high"]
         self.trend_low = current_trend["trend_low"]
-        self.signals = signals
+        self.open_signals = open_signals
         self.close_signals = close_signals
         self.tick_index = tick_index
         self.price_time_array = price_time_array
@@ -121,8 +121,10 @@ class Plotter:
         ]
         self.frame_count += 1
         
+        self.future_start = self.start_index + self.frame_count + self.visual_number + self.delay
+        self.future_end = self.future_start + self.future_number
         if self.enable_visualization:
-            self.set_plot_ranges(self.current_data)
+            self.set_plot_ranges(np.concatenate([self.current_data, self.data[self.future_start:self.future_end]]))
             self.plot_in_one()
 
             # 更新FPS
@@ -174,13 +176,6 @@ class Plotter:
                 self.safe_update_plot_line(config["name"], x_data, y_data)
                 snapshot[config["name"]] = (x_data, y_data)
 
-        # 处理 tick 相关数据，并确保每一帧都更新 bounce 线
-        self.update_point(self.signals, "high_bounce", "high_tick_price", snapshot)
-        self.update_point(self.signals, "low_bounce", "low_tick_price", snapshot)
-
-        self.update_point(self.close_signals, "high_close", "high_tick_price", snapshot)
-        self.update_point(self.close_signals, "low_close", "low_tick_price", snapshot)
-
         if self.price_time_array.size > 0:
             self.plot_lines["price_time"].setData(
                 self.price_time_array[:, 0], self.price_time_array[:, 1]
@@ -192,6 +187,15 @@ class Plotter:
         else:
             self.plot_lines["price_time"].setData([], [])
             snapshot["price_time"] = ([], [])
+        
+        # 处理 tick 相关数据，并确保每一帧都更新 bounce 线
+        self.update_point(self.open_signals, "high_open", snapshot)
+        self.update_point(self.open_signals, "low_open", snapshot)
+
+        self.update_point(self.close_signals, "high_close", snapshot)
+        self.update_point(self.close_signals, "low_close", snapshot)
+
+        
             
         if self.trend_price_high.size > 0:
             x_trend_price_high = self.trend_price_high[:, 0]
@@ -220,12 +224,12 @@ class Plotter:
             # self.paused = True
         
         # 新增部分：更新预绘制的K线（未来20根）
-        future_start = self.start_index + self.frame_count + self.visual_number + self.delay
-        future_end = future_start + self.future_number
-        if future_start < len(self.data):
-            future_end = min(len(self.data), future_end)
-            future_data = self.data[future_start:future_end]
-            future_type = self.type_data[future_start:future_end]
+        self.future_start = self.start_index + self.frame_count + self.visual_number + self.delay
+        self.future_end = self.future_start + self.future_number
+        if self.future_start < len(self.data):
+            self.future_end = min(len(self.data), self.future_end)
+            future_data = self.data[self.future_start:self.future_end]
+            future_type = self.type_data[self.future_start:self.future_end]
             # 处理绿色K线（类型0）
             indices_green = future_type == 0
             if np.any(indices_green):
@@ -267,32 +271,29 @@ class Plotter:
         if not self.paused:
             self.current_snapshot_index = len(self.plot_cache) - 1
 
-    def update_point(self, signals, point_key, tick_price_key, snapshot):
+    def update_point(self, signals, tick_price_key, snapshot):
         """
         统一处理 bounce 线的更新逻辑。若 bounce 信号存在则暂停画面更新，
         并根据 tick_price_key 获取对应数据，更新指定 bounce_key 的数据。
         """
-        if signals.get(point_key, None) is not None:
-            self.paused = True  # 暂停
-
-        tick_price = signals.get(tick_price_key, None)
-        # 根据信号判断使用对应的时间字段：若是低价信号则使用列2，否则使用列0（高价）
-        if "low" in point_key:
-            current_x = self.data[self.tick_index, 2]
-        else:
-            current_x = self.data[self.tick_index, 0]
+        trade_data = signals.get(tick_price_key, None)
+        tick_price = [signal[1] for signal in trade_data]
+        tick_time = [signal[0] for signal in trade_data]
         if tick_price is not None:
             tick_price = np.array(tick_price)
-            x_data = np.full(tick_price.shape, current_x)
+            x_data = tick_time
             y_data = tick_price
         else:
             x_data, y_data = [], []
+            
+        self.safe_update_plot_line(tick_price_key, x_data, y_data)
 
-        if not np.array_equal(
-            self.plot_lines[point_key].getData()[0], x_data
-        ) or not np.array_equal(self.plot_lines[point_key].getData()[1], y_data):
-            self.safe_update_plot_line(point_key, x_data, y_data)
-            snapshot[point_key] = (x_data, y_data)
+        snapshot[tick_price_key] = (x_data, y_data)
+        # if not np.array_equal(
+        #     self.plot_lines[point_key].getData()[0], x_data
+        # ) or not np.array_equal(self.plot_lines[point_key].getData()[1], y_data):
+        #     self.safe_update_plot_line(point_key, x_data, y_data)
+        #     snapshot[point_key] = (x_data, y_data)
 
     def refresh_frame(self):
         if self.plot_cache and 0 <= self.current_snapshot_index < len(self.plot_cache):

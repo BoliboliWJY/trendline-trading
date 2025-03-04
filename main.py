@@ -213,8 +213,6 @@ def main():
             
             with tqdm(desc="Backtesting Progress", mininterval=1) as pbar:
                 for current_trend in backtester.run_backtest():
-                    signals = {}
-                    close_signals = {}
                     while plotter.paused:
                         plotter.run()
                         time.sleep(0.05)
@@ -234,19 +232,20 @@ def main():
                     )
                     parquet_index += 1
                     
-                    trader.open_close_signal(data[base_trend_number,[1,3]],trend_tick_data, price_time_array)
+                    trader.open_close_signal(data[base_trend_number,[1,3,4,5]],trend_tick_data, price_time_array)
                     
                     
                     if trader.paused:
                         plotter.enable_visualization = True
                     else:
                         plotter.enable_visualization = False
-                    
+                    open_signals = trader.open_signals
+                    close_signals = trader.close_signals
                     # plotter.enable_visualization = True
                     # price_time_array = np.array([])
                     plotter.update_plot(
                         filtered_trend_data,
-                        signals,
+                        open_signals,
                         close_signals,
                         base_trend_number,
                         price_time_array,

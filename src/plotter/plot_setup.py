@@ -65,6 +65,10 @@ def setup_plot_lines(plot, visual_number):
         [], [], pen=horizontal_pen_low, name="Horizontal Low"
     )
 
+    plot_lines["price_time"] = plot.plot(
+        [], [], pen=None, symbol="o", symbolBrush=(255, 255, 255, 100), symbolSize=10, name="Price Time"
+    )
+    
     # 初始化多空标记点
     plot_lines["long"] = plot.plot(
         [], [], pen=None, symbol="o", symbolBrush="green", symbolSize=20, name="Long"
@@ -73,28 +77,26 @@ def setup_plot_lines(plot, visual_number):
         [], [], pen=None, symbol="o", symbolBrush="red", symbolSize=20, name="Short"
     )
 
-    plot_lines["high_bounce"] = plot.plot(
-        [], [], pen=None, symbol="x", symbolBrush="blue", symbolSize=10, name="High Bounce"
+    plot_lines["high_open"] = plot.plot(
+        [], [], pen=None, symbol="x", symbolBrush="blue", symbolSize=15, name="High Open"
     )
-    plot_lines["low_bounce"] = plot.plot(
-        [], [], pen=None, symbol="x", symbolBrush="yellow", symbolSize=10, name="Low Bounce"
+    plot_lines["low_open"] = plot.plot(
+        [], [], pen=None, symbol="x", symbolBrush="yellow", symbolSize=15, name="Low Open"
     )
     plot_lines["high_close"] = plot.plot(
-        [], [], pen=None, symbol="x", symbolBrush="purple", symbolSize=10, name="High Close"
+        [], [], pen=None, symbol="x", symbolBrush="purple", symbolSize=15, name="High Close"
     )
     plot_lines["low_close"] = plot.plot(
-        [], [], pen=None, symbol="x", symbolBrush="orange", symbolSize=10, name="Low Close"
+        [], [], pen=None, symbol="x", symbolBrush="orange", symbolSize=15, name="Low Close"
     )
     
-    plot_lines["price_time"] = plot.plot(
-        [], [], pen=None, symbol="o", symbolBrush="white", symbolSize=10, name="Price Time"
-    )
+    
     
     plot_lines["trend_price_high"] = plot.plot(
-        [], [], pen=None, symbol="o", symbolBrush="green", symbolSize=10, name="Trend Price High"
+        [], [], pen=None, symbol="o", symbolBrush=(0, 255, 0, 100), symbolSize=10, name="Trend Price High"
     )
     plot_lines["trend_price_low"] = plot.plot(
-        [], [], pen=None, symbol="o", symbolBrush="red", symbolSize=10, name="Trend Price Low"
+        [], [], pen=None, symbol="o", symbolBrush=(255, 0, 0, 100), symbolSize=10, name="Trend Price Low"
     )
     
     # 提前绘制一些k线
