@@ -81,7 +81,7 @@ def setup_plot_lines(plot, visual_number):
         [], [], pen=None, symbol="x", symbolBrush="blue", symbolSize=15, name="High Open"
     )
     plot_lines["low_open"] = plot.plot(
-        [], [], pen=None, symbol="x", symbolBrush="yellow", symbolSize=15, name="Low Open"
+        [], [], pen=None, symbol="x", symbolBrush=(255,0,255), symbolSize=15, name="Low Open"
     )
     plot_lines["high_close"] = plot.plot(
         [], [], pen=None, symbol="x", symbolBrush="purple", symbolSize=15, name="High Close"

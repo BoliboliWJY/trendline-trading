@@ -124,7 +124,7 @@ class Plotter:
         self.future_start = self.start_index + self.frame_count + self.visual_number + self.delay
         self.future_end = self.future_start + self.future_number
         if self.enable_visualization:
-            self.set_plot_ranges(np.concatenate([self.current_data, self.data[self.future_start:self.future_end]]))
+            self.set_plot_ranges(np.concatenate([self.current_data, self.data[self.future_start - 1:self.future_end]]))
             self.plot_in_one()
 
             # 更新FPS
@@ -259,6 +259,8 @@ class Plotter:
             self.safe_update_plot_line("pre_high_low_red", [], [])
             snapshot["pre_high_low_red"] = ([], [])
         
+        # 新增：将当前帧计数存入缓存
+        snapshot["frame_count"] = self.frame_count
 
         # 同时缓存当前的坐标轴范围
         snapshot["axis_range"] = {
@@ -299,14 +301,14 @@ class Plotter:
         if self.plot_cache and 0 <= self.current_snapshot_index < len(self.plot_cache):
             snapshot = self.plot_cache[self.current_snapshot_index]
             self.win.plot_widget.setUpdatesEnabled(False)  # 禁用自动更新
-            for key, (x_data, y_data) in snapshot.items():
-                if key != "axis_range":  # 跳过坐标轴范围
+            for key, val in snapshot.items():
+                # 跳过不属于图形数据的键
+                if key in ["axis_range", "frame_count"]:
+                    continue
+                # 如果该值是一个长度为2的元组则认为是图形数据进行更新
+                if isinstance(val, tuple) and len(val) == 2:
+                    x_data, y_data = val
                     self.safe_update_plot_line(key, x_data, y_data)
-            # 恢复坐标轴范围
-            # if "axis_range" in snapshot:
-            #     axis = snapshot["axis_range"]
-            #     self.plot.setXRange(*axis["x"])
-            #     self.plot.setYRange(*axis["y"])
             self.win.plot_widget.setUpdatesEnabled(True)  # 恢复自动更新
         else:
             print("No snapshot available.")
@@ -389,6 +391,17 @@ class Plotter:
         image = self.win.plot_widget.grab()
         image.save(filename)
         self.save_frame_count += 1
+        
+    def print_frame_count(self):
+        """
+        打印当前显示的缓存画面对应的帧计数，如果存在缓存则输出缓存中的帧计数，
+        否则输出当前最新的帧计数。
+        """
+        if 0 <= self.current_snapshot_index < len(self.plot_cache):
+            cached_frame_count = self.plot_cache[self.current_snapshot_index].get("frame_count", self.frame_count)
+            print(f"当前缓存画面对应的帧计数: {cached_frame_count}")
+        else:
+            print(f"当前最新帧计数: {self.frame_count}")
 
     def run(self):
         """

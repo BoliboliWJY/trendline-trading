@@ -241,8 +241,11 @@ def main():
                         plotter.enable_visualization = False
                     open_signals = trader.open_signals
                     close_signals = trader.close_signals
+                    
                     # plotter.enable_visualization = True
+                    
                     # price_time_array = np.array([])
+                    
                     plotter.update_plot(
                         filtered_trend_data,
                         open_signals,

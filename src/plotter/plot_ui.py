@@ -64,6 +64,11 @@ class PlotWindow(QtWidgets.QWidget):
         button_layout.addWidget(self.next_button)
         self.next_button.clicked.connect(self.on_next_button)
 
+        # Add a Print Frame Count button
+        self.print_frame_count_button = QtWidgets.QPushButton("Print Frame Count")
+        button_layout.addWidget(self.print_frame_count_button)
+        self.print_frame_count_button.clicked.connect(self.on_print_frame_count_button)
+
         # Add a Pause/Resume button
         self.pause_button = QtWidgets.QPushButton("Pause")
         layout.addWidget(self.pause_button)
@@ -80,6 +85,10 @@ class PlotWindow(QtWidgets.QWidget):
     def on_pause_button(self):
         if self.plotter:
             self.plotter.controller.toggle_pause()
+
+    def on_print_frame_count_button(self):
+        if self.plotter:
+            self.plotter.print_frame_count()
 
     def keyPressEvent(self, event):
         if event.key() == QtCore.Qt.Key_Space:
