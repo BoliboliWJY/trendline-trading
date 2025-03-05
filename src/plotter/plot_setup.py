@@ -77,6 +77,13 @@ def setup_plot_lines(plot, visual_number):
         [], [], pen=None, symbol="o", symbolBrush="red", symbolSize=20, name="Short"
     )
 
+    # 开平仓信号点
+    plot_lines["high_open_enter"] = plot.plot(
+        [], [], pen=None, symbol="o", symbolBrush=(102,178,155), symbolSize=15, name="High Open Enter"
+    )
+    plot_lines["low_open_enter"] = plot.plot(
+        [], [], pen=None, symbol="o", symbolBrush=(255,102,255), symbolSize=15, name="Low Open Enter"
+    )
     plot_lines["high_open"] = plot.plot(
         [], [], pen=None, symbol="x", symbolBrush="blue", symbolSize=15, name="High Open"
     )

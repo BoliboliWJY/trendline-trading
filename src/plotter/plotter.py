@@ -83,7 +83,7 @@ class Plotter:
         self.plot.setYRange(y_min / 1.01, y_max * 1.01)
 
     def initial_plot(self):
-        self.open_signals = {"high_open":[], "low_open":[]}
+        self.open_signals = {"high_open":[], "low_open":[], "high_open_enter":[], "low_open_enter":[]}
         self.close_signals = {"high_close":[], "low_close":[]}
         self.price_time_array = np.array([])
         self.trend_price_high = np.array([])
@@ -189,14 +189,20 @@ class Plotter:
             snapshot["price_time"] = ([], [])
         
         # 处理 tick 相关数据，并确保每一帧都更新 bounce 线
+        # 进入阈值信号
+        self.update_point(self.open_signals, "high_open_enter", snapshot)
+        self.update_point(self.open_signals, "low_open_enter", snapshot)
+        # 开仓信号
         self.update_point(self.open_signals, "high_open", snapshot)
         self.update_point(self.open_signals, "low_open", snapshot)
+        
+
 
         self.update_point(self.close_signals, "high_close", snapshot)
         self.update_point(self.close_signals, "low_close", snapshot)
 
         
-            
+        # 更新趋势价格线
         if self.trend_price_high.size > 0:
             x_trend_price_high = self.trend_price_high[:, 0]
             y_trend_price_high = self.trend_price_high[:, 1]
