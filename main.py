@@ -38,7 +38,7 @@ from src.backtester.trend_tick_calculator import TrendTickCalculator
 
 from src.trader.trader import Trader
 
-# %%
+# %%/
 def main():
     """
     根据配置文件加载参数，并区分实盘交易或回测模式进行处理。

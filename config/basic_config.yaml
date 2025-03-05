@@ -47,7 +47,7 @@ trading_config:
   # take_profit: 0.001 # 止盈
   
   enter_threshold: 0.001 # 趋势线对应价格与当前价格差距
-  leave_threshold: 0.008 # 离开趋势线后，价格与趋势线对应价格差距
+  leave_threshold: 0.005 # 离开趋势线后，价格与趋势线对应价格差距
   number: 1 # 小于阈值的趋势线数量
   potential_profit: 0.01 # 潜在利润
 

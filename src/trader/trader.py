@@ -18,6 +18,9 @@ class Trader:
         
         self.high_signal_found = False # 高趋势线信号找到
         self.low_signal_found = False # 低趋势线信号找到
+        
+        self.trend_price_high_last = 0 # 上一次趋势线最近的高点
+        self.trend_price_low_last = 0 # 上一次趋势线最近的低点
     
         self.open_signals = {"high_open":[], "low_open":[]}
         self.close_signals = {"high_close":[], "low_close":[]}
@@ -107,11 +110,13 @@ class Trader:
                 enter_signal, start_index, trend_idx = self.judge_signal(trend_price_high, tick_price, start_index, trend_idx, self.high_signal_found, direction="high", mode="enter")
                 if start_index is None or trend_idx is None or not enter_signal:
                     break
-                last_signal = True
             
             # 2. 等待离开趋势线区域（即价格远离趋势线，在预设leave_threshold之上）
             leave_signal, start_index, trend_idx = self.judge_signal(trend_price_high, tick_price, start_index, trend_idx, self.high_signal_found, direction="high", mode="leave")
+            if not leave_signal and start_index is not None:
+                continue
             if start_index is None or trend_idx is None:
+                last_signal = True # 没有开仓，但是已经进入过趋势线
                 break
             if leave_signal:
                 # 出发开仓订单
@@ -131,6 +136,13 @@ class Trader:
         self.sell_open_potential_signal_last = last_signal
         
     def process_buy_open_signal(self, trend_price_low, tick_price, last_signal, time):
+        """买入开仓
+            Args:
+                trend_price_low (_type_): 趋势线低点
+                tick_price (_type_): 价格
+                last_signal (_type_): 上次有没有进入阈值范围内
+                time (_type_): 时间
+        """
         start_index = 0
         trend_idx = 0
         self.open_signals["low_open"] = []
@@ -138,11 +150,15 @@ class Trader:
             if not last_signal:
                 enter_signal, start_index, trend_idx = self.judge_signal(trend_price_low, tick_price, start_index, trend_idx, self.low_signal_found, direction="low", mode="enter")
                 if start_index is None or trend_idx is None or not enter_signal:
+                    last_signal = False # 如果未进入阈值范围内，则重置
                     break
-                last_signal = True
                 
             leave_signal, start_index, trend_idx = self.judge_signal(trend_price_low, tick_price, start_index, trend_idx, self.low_signal_found, direction="low", mode="leave")
+            if not leave_signal and start_index is not None:# 打破阈值但未循环结束
+                last_signal = False
+                continue
             if start_index is None or trend_idx is None:
+                last_signal = True # 没有开仓，但是已经进入过阈值范围内
                 break
             if leave_signal:
                 self.paused = True
@@ -175,55 +191,6 @@ class Trader:
         print(f"开仓订单: {order}")
 
     
-
-    
-
-    def judge_sell_open_enter_tick(self, trend_price_high, tick_price, start_index = 0, trend_idx = 0):
-        """卖出开仓"""
-        enter_signal = False # 是否进入范围
-        
-        while start_index < len(tick_price):
-            if trend_idx >= len(trend_price_high):
-                # 如果趋势线已经遍历完，则退出
-                break
-            
-            current_price = tick_price[start_index]
-            ratio = 1 - current_price / trend_price_high[trend_idx]
-            
-            if not enter_signal:
-                if ratio < self.trading_config["enter_threshold"]:
-                    enter_signal = True
-            else:
-                if ratio < 0:# 出现打破高趋势
-                    trend_idx += 1
-                    enter_signal = False
-                elif ratio > self.trading_config["leave_threshold"]:
-                    # 出现反弹
-                    return True, start_index, trend_idx # 返回开仓信号与当前价格
-            start_index += 1
-        return False, None, None # 如果未出现进入阈值信号且运行到了结束，则返回False
-    
-    def judge_sell_open_leave_tick(self, trend_price_high, tick_price, start_index, trend_idx):
-        """确认反弹情况，卖出开仓"""
-        leave_signal = False # 是否离开范围
-        open_sell_signal = False
-        
-        while start_index < len(tick_price):
-            if trend_idx >= len(trend_price_high):
-                break
-            
-            current_price = tick_price[start_index]
-            ratio = 1 - current_price / trend_price_high[trend_idx]
-            
-            if not leave_signal:
-                if ratio < 0: # 出现打破高趋势
-                    trend_idx += 1
-                    leave_signal = False
-                elif ratio > self.trading_config["leave_threshold"]:
-                    # 离开趋势线阈值范围内，发出开仓信号
-                    return True, start_index, trend_idx # 返回开仓信号与当前价格
-            start_index += 1
-        return False, None, None # 如果未出现离开阈值信号且运行到了结束，则返回False
         
     def judge_signal(self, trend_prices, tick_prices, start_index, trend_idx, signal_found, direction:str, mode = "enter"):
         """
@@ -243,14 +210,13 @@ class Trader:
             if mode == "enter":
                 if not signal_found and ratio < self.trading_config["enter_threshold"]:
                     signal_found = True
+                    return True, start_index, trend_idx
                 elif signal_found:
                     if ratio < 0:
                         # 出现打破趋势价格的情况，更新趋势线下标并重置进入标志
                         trend_idx += 1
                         signal_found = False
-                    elif ratio > self.trading_config["leave_threshold"]:
-                        # 出现反弹，返回开仓信号
-                        return True, start_index, trend_idx
+                    
 
             elif mode == "leave":
                 if ratio > self.trading_config["leave_threshold"]:
@@ -259,6 +225,7 @@ class Trader:
                     # 出现打破趋势价格的情况，更新趋势线下标并重置进入标志
                     trend_idx += 1
                     signal_found = False
+                    return False, start_index, trend_idx # 打破阈值但未循环结束
             start_index += 1
         return False, None, None # 啥也没找到
         
