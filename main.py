@@ -232,7 +232,7 @@ def main():
                     )
                     parquet_index += 1
                     
-                    trader.open_close_signal(data[base_trend_number,[1,3,4,5]],trend_tick_data, price_time_array)
+                    trader.open_close_signal(data[base_trend_number,[1,3,4,5]],trend_tick_data, price_time_array, base_trend_number)
                     
                     
                     if trader.paused:
@@ -266,7 +266,9 @@ def main():
                     pbar.update(1)
 
             print("回测可视化已结束，继续后续操作...")
-        
+            
+            # print(trader.order_book)
+            visulize_orderbook(trader)
         
         else:
             # return
@@ -300,6 +302,55 @@ def main():
 
                     pbar.update(1)
 
+def visulize_orderbook(trader):
+    order_book = trader.order_book
+    import matplotlib.pyplot as plt
+    from datetime import datetime  # 导入datetime模块
+
+    # 提取订单信息
+    order_ids = [order['order_id'] for order in order_book]
+    stop_losses = [order['stop_loss'] for order in order_book]
+    profits = [order['profit'] for order in order_book]
+    tick_times = [order['tick_time'] for order in order_book]  # 提取tick_time
+
+    # 将tick_time转换为可读格式，添加有效性检查
+    readable_times = []
+    for t in tick_times:
+        if t >= 0:  # 检查时间戳是否有效
+            readable_times.append(datetime.fromtimestamp(t / 1000).strftime('%d'))  # 转换为秒
+        else:
+            readable_times.append("Invalid Time")  # 无效时间处理
+
+    # 计算累计利润
+    cumulative_profits = [sum(profits[:i+1]) for i in range(len(profits))]
+
+    # 创建图形
+    fig, axs = plt.subplots(2, 1, figsize=(12, 12))
+
+    # 绘制止损和盈利的订单
+    for i in range(len(order_ids)):
+        axs[0].scatter(readable_times[i], profits[i], color='green', label='Profit' if i == 0 else "")
+
+    # 添加图例
+    axs[0].legend()
+    axs[0].set_title('Order Profit/Loss Visualization')
+    axs[0].set_xlabel('Tick Time')  # 更新横坐标标签
+    axs[0].set_ylabel('Profit')
+    axs[0].axhline(0, color='black', linewidth=0.8, linestyle='--')  # 添加水平线表示盈亏平衡点
+    axs[0].grid()
+
+    # 绘制累计利润
+    axs[1].plot(readable_times, cumulative_profits, color='blue', label='Cumulative Profit')  # 更新横坐标
+    axs[1].set_title('Cumulative Profit Visualization')
+    axs[1].set_xlabel('Tick Time')  # 更新横坐标标签
+    axs[1].set_ylabel('Cumulative Profit')
+    axs[1].axhline(0, color='black', linewidth=0.8, linestyle='--')  # 添加水平线表示盈亏平衡点
+    axs[1].grid()
+
+    # 显示图形
+    plt.savefig("frames/orderbook.png")
+    plt.show()
+    print(order_book)
 
 if __name__ == "__main__":
     # import cProfile
