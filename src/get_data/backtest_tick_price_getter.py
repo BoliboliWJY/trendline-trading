@@ -25,6 +25,9 @@ class BacktestTickPriceManager:
         """
         将时间戳和价格数据打包成一个数组
         """
+        folder = os.path.dirname(base_filename)
+        if folder and not os.path.exists(folder):
+            os.makedirs(folder)
         # 先检查文件是否已存在，假设只检查第一个 chunk 的存在性
         first_chunk_file = f"{base_filename}_chunk_0.parquet"
         if os.path.exists(first_chunk_file):

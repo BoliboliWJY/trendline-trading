@@ -83,7 +83,7 @@ class Plotter:
         self.plot.setYRange(y_min / 1.01, y_max * 1.01)
 
     def initial_plot(self):
-        self.open_signals = {"high_open":[], "low_open":[], "high_open_enter":[], "low_open_enter":[]}
+        self.open_signals = {"high_open":[], "low_open":[], "high_open_enter":[], "low_open_enter":[], "sell_close_ideal":[], "buy_close_ideal":[]}
         self.close_signals = {"high_close":[], "low_close":[]}
         self.price_time_array = np.array([])
         self.trend_price_high = np.array([])
@@ -196,7 +196,11 @@ class Plotter:
         self.update_point(self.open_signals, "high_open", snapshot)
         self.update_point(self.open_signals, "low_open", snapshot)
         
-
+        # 理想平仓信号
+        self.update_point(self.open_signals, "sell_close_ideal", snapshot)
+        self.update_point(self.open_signals, "buy_close_ideal", snapshot)
+        
+        # 实际平仓信号
 
         self.update_point(self.close_signals, "high_close", snapshot)
         self.update_point(self.close_signals, "low_close", snapshot)

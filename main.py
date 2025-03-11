@@ -11,6 +11,8 @@ from tqdm import tqdm
 import datetime
 import numpy as np
 import copy
+import yaml
+import gc  # 导入垃圾回收模块
 
 # from binance.spot import Spot as Client
 from binance.um_futures import UMFutures  # 导入U本位合约市场客户端
@@ -60,11 +62,7 @@ def main():
     interval = basic_config["interval"]
     run_type = basic_config["run_type"]  # True: 实盘；False: 回测
 
-    # 趋势参数
-    trend_config = basic_config["trend_config"]
-    trading_config = basic_config["trading_config"]
-    # 将趋势间隔时间转换为毫秒单位
-    trend_config["interval"] = time_number(trend_config["interval"]) * 1000
+    
 
     # 创建 Binance 客户端
     client = UMFutures(key, secret)
@@ -154,7 +152,7 @@ def main():
         visual_number = basic_config["visual_number"]
         base_trend_number = index + 1  # 可根据需要固定，也可以用 index
 
-        parquet_filename = f"backtest/tick/BTCUSDT/parquet/{coin_type}_{interval}_{backtest_calculate_time_str}_{backtest_end_time_str}"
+        parquet_filename = f"backtest/tick/BTCUSDT/parquet/{interval}/{coin_type}_{interval}_{backtest_calculate_time_str}_{backtest_end_time_str}"
         backtest_tick_price.package_data(
             data[base_trend_number:, 6], data[base_trend_number:, 7], parquet_filename
         )
@@ -170,6 +168,22 @@ def main():
         )
         parquet_index = 1
 
+        # TODO:在这里开始正式回测
+        # 趋势参数
+        if basic_config["exhaustive_mode"]:
+            exhaustive_mode(basic_config, backtest_tick_price, data, type_data, base_trend_number, parquet_filename, parquet_index)
+            return
+        # else:
+        #     return
+
+
+        copy_basic_config = copy.deepcopy(basic_config)
+        trend_config = copy_basic_config["trend_config"]
+        trading_config = copy_basic_config["trading_config"]
+        # 将趋势间隔时间转换为毫秒单位
+        trend_config["interval"] = time_number(trend_config["interval"]) * 1000
+        # 开始回测
+        
         # 初始化回测器
         backtester = Backtester(data, type_data, base_trend_number)
         initial_trend_data = backtester.initial_trend_data
@@ -201,8 +215,6 @@ def main():
                 visual_number,
                 cache_len,
             )
-            # 初始化交易器
-            # trader = Trader(data, trend_config, trading_config, plotter)
             
             base_trend_number += 1
             # start_time = time.time()
@@ -261,6 +273,7 @@ def main():
                         plotter.save_frame(coin_type)
 
                     base_trend_number += 1
+                    
 
 
                     pbar.update(1)
@@ -269,7 +282,13 @@ def main():
             
             # print(trader.order_book)
             visulize_orderbook(trader)
-        
+            # 计算盈利大于0.005的比例
+            profits = [order['profit'] for order in trader.order_book]
+            profitable_trades = sum(1 for profit in profits if profit > 0.005)
+            total_trades = len(profits)
+            profit_ratio = profitable_trades / total_trades if total_trades > 0 else 0
+            print(f"盈利大于0.005的比例: {profit_ratio:.2%}")
+            
         else:
             # return
             base_trend_number += 1
@@ -292,15 +311,131 @@ def main():
                     )
                     parquet_index += 1
                     
-                    trader.open_close_signal(data[base_trend_number,[1,3]],trend_tick_data, price_time_array)
-                    
+                    trader.open_close_signal(data[base_trend_number,[1,3,4,5]],trend_tick_data, price_time_array, base_trend_number)
                     
 
+                    open_signals = trader.open_signals
+                    close_signals = trader.close_signals
 
                     base_trend_number += 1
 
-
                     pbar.update(1)
+            profits = [order['profit'] for order in trader.order_book]
+            profitable_trades = sum(1 for profit in profits if profit > 0.01)
+            total_trades = len(profits)
+            profit_ratio = profitable_trades / total_trades if total_trades > 0 else 0
+            print(f"盈利大于0.01的比例: {profit_ratio:.2%}")
+
+def exhaustive_mode(basic_config, backtest_tick_price, data, type_data, base_trend_number, parquet_filename, parquet_index):
+    import itertools
+    import gc  # 导入垃圾回收模块
+    delay_range = [10, 30, 50]
+    filter_reverse_range = [True, False]
+    min_line_age_range = [50, 100, 150]
+    distance_threshold_range = [100, 200, 300]
+    filter_trending_line_number_range = [5, 10]
+    enter_threshold_range = [0.0003, 0.0006, 0.0009]
+    leave_threshold_range = [0.0003, 0.0006, 0.0009]
+    potential_profit_range = [0.002]
+    trailing_profit_threshold_range = [0.002, 0.004, 0.006]
+    trailing_stop_loss_range = [0.003, 0.005]
+    best_profit = -np.inf
+    best_params = None
+    results = []
+    # 保存初始的 base_trend_number 和 parquet_index，以便后续每轮都进行重置
+    original_base_trend_number = base_trend_number
+    original_parquet_index = parquet_index
+    for delay, filter_reverse, min_line_age, distance_threshold, filter_trending_line_number, enter_threshold, leave_threshold, potential_profit, trailing_profit_threshold, trailing_stop_loss in tqdm(
+        itertools.product(
+            delay_range,
+            filter_reverse_range,
+            min_line_age_range,
+            distance_threshold_range,
+            filter_trending_line_number_range,
+            enter_threshold_range,
+            leave_threshold_range,
+            potential_profit_range,
+            trailing_profit_threshold_range,
+            trailing_stop_loss_range
+        ),
+        desc="穷举中",
+        total=len(delay_range) * len(filter_reverse_range) * len(min_line_age_range) * len(distance_threshold_range) * len(filter_trending_line_number_range) * len(enter_threshold_range) * len(leave_threshold_range) * len(potential_profit_range) * len(trailing_profit_threshold_range) * len(trailing_stop_loss_range)
+    ):
+        # 每次试验前重置 base_trend_number 和 parquet_index
+        temp_base_trend_number = original_base_trend_number
+        temp_parquet_index = original_parquet_index
+        config = copy.deepcopy(basic_config)
+        config["trend_config"]["delay"] = delay
+        config["trend_config"]["filter_reverse"] = filter_reverse
+        config["trend_config"]["min_line_age"] = min_line_age
+        config["trend_config"]["distance_threshold"] = distance_threshold
+        config["trend_config"]["filter_trending_line_number"] = filter_trending_line_number
+        config["trading_config"]["enter_threshold"] = enter_threshold
+        config["trading_config"]["leave_threshold"] = leave_threshold
+        config["trading_config"]["potential_profit"] = potential_profit
+        config["trading_config"]["trailing_profit_threshold"] = trailing_profit_threshold
+        config["trading_config"]["trailing_stop_loss"] = trailing_stop_loss
+        trend_config = config["trend_config"]
+        trading_config = config["trading_config"]
+        # 将趋势间隔时间转换为毫秒单位
+        trend_config["interval"] = time_number(trend_config["interval"]) * 1000
+        # 开始回测：使用临时的 temp_base_trend_number 而非外部的 base_trend_number
+        backtester = Backtester(data, type_data, temp_base_trend_number)
+        initial_trend_data = backtester.initial_trend_data
+        # 过滤趋势
+        filter_trend = trend_filter(data, trend_config)
+        # 初始过滤趋势数据
+        initial_filtered_trend_data = filter_trend.filter_trend_initial(
+            initial_trend_data["trend_high"],
+            initial_trend_data["trend_low"],
+        )
+        # 初始化趋势价格计算器
+        trend_tick_calculator = TrendTickCalculator(data, trend_config, initial_filtered_trend_data)
+        # 初始化交易器
+        trader = Trader(data, trend_config, trading_config)
+        # 运行回测，每次均使用 temp_base_trend_number 和 temp_parquet_index
+        for current_trend in backtester.run_backtest():
+            # 过滤趋势
+            filtered_trend_data = filter_trend.process_new_trend(
+                initial_filtered_trend_data,
+                current_trend,
+            )
+            # 计算趋势价格
+            trend_tick_data = trend_tick_calculator.update_trend_data(data, temp_base_trend_number, filtered_trend_data)
+            # 获取价格时间数组
+            price_time_array = backtest_tick_price.package_data_loader(
+                temp_parquet_index, parquet_filename
+            )
+            temp_parquet_index += 1
+            trader.open_close_signal(data[temp_base_trend_number, [1, 3, 4, 5]], trend_tick_data, price_time_array, temp_base_trend_number)
+            temp_base_trend_number += 1
+        profits = [order['profit'] for order in trader.order_book]
+        profitable_trades = sum(1 for profit in profits if profit > 0.01)
+        total_trades = len(profits)
+        profit_ratio = profitable_trades / total_trades if total_trades > 0 else 0
+        print(f"盈利大于0.01的比例: {profit_ratio:.2%}")
+        results.append({
+            "trend_config": trend_config,
+            "trading_config": trading_config,
+            "profit_ratio": profit_ratio,
+        })
+        if profit_ratio > best_profit:
+            best_profit = profit_ratio
+            best_params = {
+                "trend_config": trend_config,
+                "trading_config": trading_config,
+            }
+            save_best_params(best_params)
+        print(f"当前盈利比例: {profit_ratio:.2%}")
+        # 显式删除不再使用的对象，并触发垃圾回收
+        del backtester, trader, trend_tick_calculator, filter_trend, initial_filtered_trend_data
+        gc.collect()
+    print(f"最佳参数: {best_params}")
+    print(f"最佳盈利比例: {best_profit:.2%}")
+    
+def save_best_params(best_params):
+    with open("best_params.yaml", "w") as f:
+        yaml.dump(best_params, f, default_flow_style=False)
 
 def visulize_orderbook(trader):
     order_book = trader.order_book
@@ -323,6 +458,8 @@ def visulize_orderbook(trader):
 
     # 计算累计利润
     cumulative_profits = [sum(profits[:i+1]) for i in range(len(profits))]
+
+    
 
     # 创建图形
     fig, axs = plt.subplots(2, 1, figsize=(12, 12))
@@ -350,7 +487,9 @@ def visulize_orderbook(trader):
     # 显示图形
     plt.savefig("frames/orderbook.png")
     plt.show()
-    print(order_book)
+    
+    
+    # print(order_book)
 
 if __name__ == "__main__":
     # import cProfile

@@ -22,7 +22,7 @@ class Trader:
         self.trend_price_high_last = 0 # 上一次趋势线最近的高点
         self.trend_price_low_last = 0 # 上一次趋势线最近的低点
     
-        self.open_signals = {"high_open":[], "low_open":[], "high_open_enter":[], "low_open_enter":[]}
+        self.open_signals = {"high_open":[], "low_open":[], "high_open_enter":[], "low_open_enter":[], "sell_close_ideal":[], "buy_close_ideal":[]}
         self.close_signals = {"high_close":[], "low_close":[]}
         
         self.close_potential_signal = False # 潜在平仓信号，需要具体对tick分析
@@ -180,7 +180,7 @@ class Trader:
             "tick_time": tick_time,
             "status": "open",
             "stop_loss": stop_loss,
-            "profit": profit
+            "profit": profit,
         }
         self.order_book.append(order)
         # print(f"开仓订单: {order}")
@@ -228,51 +228,78 @@ class Trader:
         
     def predict_profit_loss(self, order_type:str, price:float, key_price:float):
         """
-        预测未来k线结果出现止损或盈利情况
+        预测未来k线结果出现止损、止盈或盈利情况
         Args:
             order_type: "sell" 或 "buy"，对应订单类型
             price: 当前价格
+            key_price: 用于计算收益的关键价格
         Returns:
-            
+            (stop_loss, max_profit_before_stop_loss)
         """
         further_sight = self.trading_config["further_sight"]
         if self.base_trend_number + further_sight > len(self.data):
             further_sight = len(self.data) - self.base_trend_number - 1
         
-        further_sight_data = self.data[self.base_trend_number + 1:self.base_trend_number + further_sight + 1, :] # 未来k线数据结果
+        # 未来 k 线数据
+        further_sight_data = self.data[self.base_trend_number + 1:self.base_trend_number + further_sight + 1, :]
         
-        stop_loss = False # 是否出现止损
-        # max_drawdown = 0.00 # 先寻找最大回撤
-        # max_profit_before_stop_loss =  -0.04# 在止损前的最大收益率
+        stop_loss = False  # 是否触发止损
+        ideal_price = key_price
+        ideal_time = self.data[self.base_trend_number][0]
         
         if order_type == "sell":
-            # 若为卖出，则止损价格为当前趋势线最高点
+            # 卖出时收益计算： (开仓价格 - 关键价格) / 开仓价格
             max_profit_before_stop_loss = (price - key_price) / price
             if max_profit_before_stop_loss < -self.trading_config["trailing_stop_loss"]:
                 stop_loss = True
+                self.open_signals["sell_close_ideal"].append([ideal_time, key_price])
                 return stop_loss, max(max_profit_before_stop_loss, -self.trading_config["trailing_stop_loss"])
+            
             for i in range(further_sight):
+                # 计算止损跌幅
                 drawdown = (price - further_sight_data[i][1]) / price
                 if drawdown < -self.trading_config["trailing_stop_loss"]:
                     stop_loss = True
+                    self.open_signals["sell_close_ideal"].append([ideal_time, ideal_price])
                     return stop_loss, max_profit_before_stop_loss
                 else:
-                    max_profit_before_stop_loss = max(max_profit_before_stop_loss, (price - further_sight_data[i][3]) / price)
+                    # 计算最新的潜在收益（获利）
+                    potential_profit = (price - further_sight_data[i][3]) / price
+                    if max_profit_before_stop_loss < potential_profit:
+                        max_profit_before_stop_loss = potential_profit
+                        ideal_price = further_sight_data[i][3]
+                        ideal_time = further_sight_data[i][2]
+                        # 当获利达到 0.005 时触发止盈
+                        if max_profit_before_stop_loss >= 0.005:
+                            self.open_signals["sell_close_ideal"].append([ideal_time, ideal_price])
+                            return stop_loss, max_profit_before_stop_loss
+            self.open_signals["sell_close_ideal"].append([ideal_time, ideal_price])
                 
-            
         else:
-            # 若为买入，则止损价格为当前趋势线最低点
+            # 买入时收益计算： (关键价格 - 开仓价格) / 开仓价格
             max_profit_before_stop_loss = (key_price - price) / price
             if max_profit_before_stop_loss < -self.trading_config["trailing_stop_loss"]:
                 stop_loss = True
+                self.open_signals["buy_close_ideal"].append([ideal_time, key_price])
                 return stop_loss, max(max_profit_before_stop_loss, -self.trading_config["trailing_stop_loss"])
+            
             for i in range(further_sight):
                 drawdown = (further_sight_data[i][3] - price) / price
                 if drawdown < -self.trading_config["trailing_stop_loss"]:
                     stop_loss = True
+                    self.open_signals["buy_close_ideal"].append([ideal_time, ideal_price])
                     return stop_loss, max_profit_before_stop_loss
                 else:
-                    max_profit_before_stop_loss = max(max_profit_before_stop_loss, (further_sight_data[i][1] - price) / price)
+                    potential_profit = (further_sight_data[i][1] - price) / price
+                    if max_profit_before_stop_loss < potential_profit:
+                        max_profit_before_stop_loss = potential_profit
+                        ideal_price = further_sight_data[i][1]
+                        ideal_time = further_sight_data[i][0]
+                        # 当获利达到 0.006 时触发止盈
+                        if max_profit_before_stop_loss >= 0.006:
+                            self.open_signals["buy_close_ideal"].append([ideal_time, ideal_price])
+                            return stop_loss, max_profit_before_stop_loss
+            self.open_signals["buy_close_ideal"].append([ideal_time, ideal_price])
         
         return stop_loss, max_profit_before_stop_loss
         

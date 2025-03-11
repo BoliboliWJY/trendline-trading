@@ -66,7 +66,7 @@ def setup_plot_lines(plot, visual_number):
     )
 
     plot_lines["price_time"] = plot.plot(
-        [], [], pen=None, symbol="o", symbolBrush=(255, 255, 255, 100), symbolSize=10, name="Price Time"
+        [], [], pen=None, symbol="o", symbolBrush=(255, 255, 255, 100), symbolSize=3, name="Price Time"
     )
     
     # 初始化多空标记点
@@ -77,19 +77,27 @@ def setup_plot_lines(plot, visual_number):
         [], [], pen=None, symbol="o", symbolBrush="red", symbolSize=20, name="Short"
     )
 
-    # 开平仓信号点
-    plot_lines["high_open_enter"] = plot.plot(
-        [], [], pen=None, symbol="o", symbolBrush=(102,178,155), symbolSize=15, name="High Open Enter"
-    )
-    plot_lines["low_open_enter"] = plot.plot(
-        [], [], pen=None, symbol="o", symbolBrush=(255,102,255), symbolSize=15, name="Low Open Enter"
-    )
+    # 开仓信号点
     plot_lines["high_open"] = plot.plot(
-        [], [], pen=None, symbol="x", symbolBrush="blue", symbolSize=15, name="High Open"
+        [], [], pen=None, symbol="x", symbolBrush=(0,128,255), symbolSize=15, name="High Open"
     )
     plot_lines["low_open"] = plot.plot(
         [], [], pen=None, symbol="x", symbolBrush=(255,0,255), symbolSize=15, name="Low Open"
     )
+    plot_lines["high_open_enter"] = plot.plot(
+        [], [], pen=None, symbol="o", symbolBrush=(102,178,155), symbolSize=5, name="High Open Enter"
+    )
+    plot_lines["low_open_enter"] = plot.plot(
+        [], [], pen=None, symbol="o", symbolBrush=(255,102,255), symbolSize=5, name="Low Open Enter"
+    )
+    plot_lines["sell_close_ideal"] = plot.plot(
+        [], [], pen=None, symbol="x", symbolBrush=(0,0,102), symbolSize=15, name="Sell Close Ideal"
+    )
+    plot_lines["buy_close_ideal"] = plot.plot(
+        [], [], pen=None, symbol="x", symbolBrush=(102,0,51), symbolSize=15, name="Buy Close Ideal"
+    )
+    
+    # 平仓信号点
     plot_lines["high_close"] = plot.plot(
         [], [], pen=None, symbol="x", symbolBrush="purple", symbolSize=15, name="High Close"
     )
