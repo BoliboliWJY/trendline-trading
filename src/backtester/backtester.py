@@ -1,34 +1,37 @@
 import time
 from src.utils import profile_method
 
+
 # Import other dependencies from src as needed:
 from src.trend_calculator.compute_initial_trends import compute_initial_trends
-
+from src.trend_calculator.trend_generator import backtest_calculate_trend_generator
 
 class Backtester:
+    """历史数据回测器，但不再过滤趋势，直接输出未过滤的趋势以及每次被删除的趋势
+
+    Returns:
+        current_trend: 当前趋势数据
+            trend_high: 完整的高趋势数据
+            trend_low: 完整的低趋势数据
+            deleted_high: 被删除的高趋势数据
+            deleted_low: 被删除的低趋势数据
+    """
     # @profile_method
     def __init__(
         self,
         data,
         type_data,
-        trend_generator,
-        filter_trend,
-        trend_config,
         base_trend_number=1000,
     ):
         self.data = data
         self.type_data = type_data
-        self.trend_generator = trend_generator
-        self.filter_trend = filter_trend
-        self.trend_config = trend_config
+        self.trend_generator = backtest_calculate_trend_generator(data=data)
         self.base_trend_number = base_trend_number  # 前置趋势数量
 
         # 趋势管理
         # self.deleted_trends = {}
         self.trend_high = []  # 完整的高趋势数据
         self.trend_low = []  # 完整的低趋势数据
-        self.last_filtered_high = []  # 最后过滤的高趋势数据
-        self.last_filtered_low = []  # 最后过滤的低趋势数据
 
         # 可视化参数
 
@@ -46,37 +49,15 @@ class Backtester:
         初始化趋势，并记录被删除的趋势
         """
         # 计算
-        (
-            self.trend_high,
-            self.trend_low,
-            self.last_filtered_high,
-            self.last_filtered_low,
-        ) = compute_initial_trends(
-            self.current_data,
-            self.trend_generator,
-            self.data,
-            self.trend_config,
-            self.last_filtered_high,
-            self.last_filtered_low,
-        )
+        self.trend_high,self.trend_low = compute_initial_trends(self.current_data,self.trend_generator)
         # 保存计算结果
         # self.trend_high = trend_high
         # self.trend_low = trend_low
 
-        # 过滤趋势
-        self.last_filtered_high, self.last_filtered_low = self.filter_trend(
-            self.trend_high,
-            self.trend_low,
-            self.last_filtered_high,
-            self.last_filtered_low,
-            self.data,
-            self.trend_config,
-        )
-
         # 返回结构化的趋势数据 初始化趋势
         return {
-            "trend_high": self.last_filtered_high[:-1],
-            "trend_low": self.last_filtered_low[:-1],
+            "trend_high": self.trend_high,
+            "trend_low": self.trend_low,
         }
 
     # @profile_method
@@ -95,45 +76,14 @@ class Backtester:
         except StopIteration:
             self.trend_high, self.trend_low, deleted_high, deleted_low = [], [], [], []
 
-        # 处理被删除的趋势，如果发现突破则返回 True
-        removing_item_high, removed_items_high = self._remove_items(self.last_filtered_high, deleted_high)
-        removing_item_low, removed_items_low = self._remove_items(self.last_filtered_low, deleted_low)
-        removing_item = removing_item_high or removing_item_low
-        # print("发现突破" if removing_item else "未发现突破")
-
-        return_trend_high = self.last_filtered_high
-        return_trend_low = self.last_filtered_low
-
-        #除了被删除的趋势还需要额外一个最近的且未被删除的趋势（但如果是实盘则需要全部计算）
-        removed_items_high.append([next(x[0] for x in reversed(return_trend_high) if x)])
-        removed_items_low.append([next(x[-1] for x in reversed(return_trend_low) if x)])
-        
-
-        # 过滤趋势
-        self.last_filtered_high, self.last_filtered_low = self.filter_trend(
-            self.trend_high,
-            self.trend_low,
-            self.last_filtered_high,
-            self.last_filtered_low,
-            self.data,
-            self.trend_config,
-        )
-
         updated_trend = {
-            "trend_high": return_trend_high,
-            "trend_low": return_trend_low,
-            "removing_item": removing_item,
-            "removed_items_high": removed_items_high,
-            "removed_items_low": removed_items_low,
+            "trend_high": self.trend_high,
+            "trend_low": self.trend_low,
+            "deleted_high": deleted_high,
+            "deleted_low": deleted_low,
         }
-        # 未过滤的数据
-        # updated_trend = {
-        #     "trend_high": self.trend_high,
-        #     "trend_low": self.trend_low,
-        #     "removing_item": removing_item,
-        # }
 
-        self.backtest_count += 1
+        self.backtest_count += 1 # 回测计数
 
         return updated_trend  # 返回更新后的趋势数据
 

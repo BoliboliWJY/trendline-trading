@@ -7,9 +7,12 @@
 """
 
 import time
+from tqdm import tqdm
 import datetime
 import numpy as np
 import copy
+import yaml
+import gc  # 导入垃圾回收模块
 
 # from binance.spot import Spot as Client
 from binance.um_futures import UMFutures  # 导入U本位合约市场客户端
@@ -17,10 +20,9 @@ from binance.um_futures import UMFutures  # 导入U本位合约市场客户端
 
 # from binance import Client
 from src.config_manager import load_basic_config
-from src.data_loader import load_or_fetch_data
 from src.trend_calculator.trend_generator import backtest_calculate_trend_generator
 from src.trend_calculator.trend_process import initial_single_slope, calculate_trend
-from src.filter.filters import filter_trend
+from src.filter.filters import trend_filter
 from src.time_number import time_number
 from src.latest_data.new_price import get_current_price
 from src.latest_data.latest_klines import get_latest_klines
@@ -33,11 +35,12 @@ from src.get_data.data_getter import data_getter
 # 回测tick价格管理器
 from src.get_data.backtest_tick_price_getter import BacktestTickPriceManager
 
-# 交易员
+# 趋势价格计算器
+from src.backtester.trend_tick_calculator import TrendTickCalculator
+
 from src.trader.trader import Trader
 
-
-# %%
+# %%/
 def main():
     """
     根据配置文件加载参数，并区分实盘交易或回测模式进行处理。
@@ -53,16 +56,13 @@ def main():
     key = basic_config["key"]
     secret = basic_config["secret"]
     coin_type = basic_config["coin_type"]
+    contract_type = basic_config["contract_type"]
     # aim_time_str = basic_config["aim_time"]
     # total_length = basic_config["total_length"]
     interval = basic_config["interval"]
     run_type = basic_config["run_type"]  # True: 实盘；False: 回测
 
-    # 趋势参数
-    trend_config = basic_config["trend_config"]
-    trading_config = basic_config["trading_config"]
-    # 将趋势间隔时间转换为毫秒单位
-    trend_config["interval"] = time_number(trend_config["interval"]) * 1000
+    
 
     # 创建 Binance 客户端
     client = UMFutures(key, secret)
@@ -74,6 +74,7 @@ def main():
         # ---------------------
         # 实盘交易模式
         # ---------------------
+        return
         current_price = get_current_price(client, coin_type)
         print("当前价格:", current_price)
         data, type_data = get_latest_klines(client, coin_type, interval, total_length)
@@ -139,8 +140,7 @@ def main():
             )
             * 1000
         )
-        index = np.searchsorted(data[:, 5], backtest_calculate_time, side="left")
-        index = index - 1
+        index = np.searchsorted(data[:, 6], backtest_calculate_time, side="left") - 1 # 搜索开盘时间前一个点
         if index < len(data):
             print(
                 f"第一个满足 data[:,0] > aim_time 的索引是 {index}, 时间戳为 {data[index, 0]}"
@@ -150,141 +150,350 @@ def main():
 
         visualize_mode = basic_config["visualize_mode"]
         visual_number = basic_config["visual_number"]
-        base_trend_number = index  # 可根据需要固定，也可以用 index
+        base_trend_number = index + 1  # 可根据需要固定，也可以用 index
 
-        # 5. 初始化趋势生成器与回测器
-        trend_generator = backtest_calculate_trend_generator(
-            data=data,
-            initial_single_slope=initial_single_slope,
-            calculate_trend=calculate_trend,
+        parquet_filename = f"backtest/tick/BTCUSDT/parquet/{interval}/{coin_type}_{interval}_{backtest_calculate_time_str}_{backtest_end_time_str}"
+        backtest_tick_price.package_data(
+            data[base_trend_number:, 6], data[base_trend_number:, 7], parquet_filename
         )
-
-        backtester = Backtester(
+        data = backtest_tick_price.modify_data(
             data,
-            type_data,
-            trend_generator,
-            filter_trend,
-            trend_config,
             base_trend_number,
+            parquet_filename,
+            coin_type,
+            interval,
+            length,
+            backtest_start_time,
+            backtest_end_time,
         )
-        initial_trend_data = backtester.initial_trend_data
-        current_trend_high = initial_trend_data["trend_high"]
-        current_trend_low = initial_trend_data["trend_low"]
+        parquet_index = 1
 
-        backtest_trader = Trader(trading_config)
+        # TODO:在这里开始正式回测
+        # 趋势参数
+        if basic_config["exhaustive_mode"]:
+            exhaustive_mode(basic_config, backtest_tick_price, data, type_data, base_trend_number, parquet_filename, parquet_index)
+            return
+        # else:
+        #     return
+
+
+        copy_basic_config = copy.deepcopy(basic_config)
+        trend_config = copy_basic_config["trend_config"]
+        trading_config = copy_basic_config["trading_config"]
+        # 将趋势间隔时间转换为毫秒单位
+        trend_config["interval"] = time_number(trend_config["interval"]) * 1000
+        # 开始回测
+        
+        # 初始化回测器
+        backtester = Backtester(data, type_data, base_trend_number)
+        initial_trend_data = backtester.initial_trend_data
+        # 过滤趋势
+        filter_trend = trend_filter(data,trend_config)
+        # 初始过滤趋势数据
+        initial_filtered_trend_data = filter_trend.filter_trend_initial(
+            initial_trend_data["trend_high"],
+            initial_trend_data["trend_low"],
+        )  
+        
+        # 初始化趋势价格计算器
+        trend_tick_calculator = TrendTickCalculator(data, trend_config, initial_filtered_trend_data)
+        
+        # # 初始化交易器
+        trader = Trader(data, trend_config, trading_config)
 
         # 6. 根据配置决定是否可视化
         if visualize_mode:
-            delay = (
-                trend_config.get("delay")
-                if trend_config.get("enable_filter", True)
-                else 1
-            )
             cache_len = 1000  # 缓存长度
+            if base_trend_number < visual_number:
+                error_msg = f"base_trend_number 小于 visual_number，请检查配置文件"
+                raise ValueError(error_msg)
             plotter = Plotter(
-                data, type_data, initial_trend_data, visual_number, delay, cache_len
+                data,
+                type_data,
+                initial_filtered_trend_data,
+                base_trend_number,
+                visual_number,
+                cache_len,
             )
-
-            for current_trend in backtester.run_backtest():
-                open_times = 0 # 初始化开仓次数
-                # 如果处于暂停状态，则持续等待
-                signals = {}
-                close_signals = {}
-                while plotter.paused:
-                    plotter.run()
-                    time.sleep(0.05)
-                # 获取趋势数据对应tick价格
-                hit_line = backtest_trader.get_trend_data(data, base_trend_number, current_trend["removed_items_high"], current_trend["removed_items_low"])
-                # 获取趋势线开仓状态（保留上一次的）
-                if backtest_trader.pre_state_high == True or backtest_trader.pre_state_low == True:
-                    continuous = True
-                else:
-                    backtest_trader.pre_state_high = False
-                    backtest_trader.pre_state_low = False
-                    continuous = False
+            
+            base_trend_number += 1
+            # start_time = time.time()
+            # backtester.run_backtest()
+            # backtester.run_backtest()
+            
+            idx_draw = 0
+            
+            with tqdm(desc="Backtesting Progress", mininterval=1) as pbar:
+                for current_trend in backtester.run_backtest():
+                    while plotter.paused:
+                        plotter.run()
+                        time.sleep(0.05)
                     
-                if backtest_trader.pre_close_high == True or backtest_trader.pre_close_low == True:
-                    continuous_close = True
-                else:
-                    backtest_trader.pre_close_high = False
-                    backtest_trader.pre_close_low = False
-                    continuous_close = False
+                    # 过滤趋势
+                    filtered_trend_data = filter_trend.process_new_trend(
+                        initial_filtered_trend_data,
+                        current_trend,
+                    )
+                    
+                    # 计算趋势价格
+                    trend_tick_data = trend_tick_calculator.update_trend_data(data, base_trend_number, filtered_trend_data)
+                    
+                    # 获取价格时间数组
+                    price_time_array = backtest_tick_price.package_data_loader(
+                        parquet_index, parquet_filename
+                    )
+                    parquet_index += 1
+                    
+                    trader.open_close_signal(data[base_trend_number,[1,3,4,5]],trend_tick_data, price_time_array, base_trend_number)
+                    
+                    
+                    if trader.paused:
+                        plotter.enable_visualization = True
+                    else:
+                        plotter.enable_visualization = False
+                    open_signals = trader.open_signals
+                    close_signals = trader.close_signals
+                    
+                    # plotter.enable_visualization = True
+                    
+                    # price_time_array = np.array([])
+                    
+                    plotter.update_plot(
+                        filtered_trend_data,
+                        open_signals,
+                        close_signals,
+                        base_trend_number,
+                        price_time_array,
+                        trend_tick_data,
+                    )
+                    
+                    plotter.run()
+                    
+                    if plotter.enable_visualization:
+                        plotter.save_frame(coin_type)
 
-                lower_bound = data[base_trend_number - 1, 6]
-                upper_bound = lower_bound + trend_config["interval"]
-                backtest_trader.signals = {"tick_price": []}  # 重置交易信号
-                backtest_trader.close_signals = {"tick_price": []}  # 重置平仓信号
-                # 开仓判断
-                if current_trend["removing_item"] == True or hit_line or continuous or continuous_close:
-                    for tick_price, tick_timestamp in backtest_tick_price.yield_prices_from_filtered_data(lower_bound, upper_bound):
-                        if open_times < trading_config["open_times"]:
-                            backtest_trader.evaluate_trade_signal(tick_price, tick_timestamp) # 评估开仓信号
-                        backtest_trader.monitor_close(tick_price, tick_timestamp, backtest_trader.signals, base_trend_number)  # 监控平仓信号
-                    if "high_open" in backtest_trader.book_order and backtest_trader.book_order["high_open"] or "low_open" in backtest_trader.book_order and backtest_trader.book_order["low_open"]:
-                        open_times += 1 # 开仓次数+1
-                    signals = backtest_trader.signals
-                    # TODO 平仓逻辑仍有问题，锁定利润（移动止损）仍不对
-                    close_signals = backtest_trader.close_signals
+                    base_trend_number += 1
+                    
 
-                backtest_trader.notification_open(data, base_trend_number, signals)
 
-                plotter.update_plot(current_trend, signals, close_signals, base_trend_number)
-                plotter.run()
-                base_trend_number += 1
+                    pbar.update(1)
 
             print("回测可视化已结束，继续后续操作...")
+            
+            # print(trader.order_book)
+            visulize_orderbook(trader)
+            # 计算盈利大于0.005的比例
+            profits = [order['profit'] for order in trader.order_book]
+            profitable_trades = sum(1 for profit in profits if profit > 0.005)
+            total_trades = len(profits)
+            profit_ratio = profitable_trades / total_trades if total_trades > 0 else 0
+            print(f"盈利大于0.005的比例: {profit_ratio:.2%}")
+            
         else:
-            for current_trend in backtester.run_backtest():
-                # 如果处于暂停状态，则持续等待
-                signals = {}
-                close_signals = {}
+            # return
+            base_trend_number += 1
+            # start_time = time.time()
+            with tqdm(desc="Backtesting Progress", mininterval=1) as pbar:
+                for current_trend in backtester.run_backtest():
+                    
+                    # 过滤趋势
+                    filtered_trend_data = filter_trend.process_new_trend(
+                        initial_filtered_trend_data,
+                        current_trend,
+                    )
+                    
+                    # 计算趋势价格
+                    trend_tick_data = trend_tick_calculator.update_trend_data(data, base_trend_number, filtered_trend_data)
+                    
+                    # 获取价格时间数组
+                    price_time_array = backtest_tick_price.package_data_loader(
+                        parquet_index, parquet_filename
+                    )
+                    parquet_index += 1
+                    
+                    trader.open_close_signal(data[base_trend_number,[1,3,4,5]],trend_tick_data, price_time_array, base_trend_number)
+                    
 
-                # 获取趋势数据对应tick价格
-                hit_line = backtest_trader.get_trend_data(
-                    data,
-                    base_trend_number,
-                    current_trend["removed_items_high"],
-                    current_trend["removed_items_low"],
-                )
-                if (
-                    backtest_trader.pre_state_high == True
-                    or backtest_trader.pre_state_low == True
-                ):
-                    continuous = True
-                else:
-                    backtest_trader.pre_state_high = False
-                    backtest_trader.pre_state_low = False
-                    continuous = False
-                # 开仓判断
-                if current_trend["removing_item"] == True or hit_line or continuous:
-                    lower_bound = data[base_trend_number - 1, 6]
-                    upper_bound = lower_bound + trend_config["interval"]
-                    backtest_trader.signals = {"tick_price": []}  # 重置交易信号
-                    backtest_trader.close_signals = {"tick_price": []}  # 重置平仓信号
-                    for (
-                        tick_price,
-                        tick_timestamp,
-                    ) in backtest_tick_price.yield_prices_from_filtered_data(
-                        lower_bound, upper_bound
-                    ):
-                        backtest_trader.evaluate_trade_signal(
-                            tick_price, tick_timestamp
-                        )  # 评估开仓信号
-                        backtest_trader.monitor_close(
-                            tick_price, tick_timestamp, backtest_trader.signals
-                        )  # 监控平仓信号
-                    signals = backtest_trader.signals
-                    close_signals = backtest_trader.close_signals
+                    open_signals = trader.open_signals
+                    close_signals = trader.close_signals
 
-                backtest_trader.notification_open(data, base_trend_number, signals)
+                    base_trend_number += 1
 
-                base_trend_number += 1
+                    pbar.update(1)
+            profits = [order['profit'] for order in trader.order_book]
+            profitable_trades = sum(1 for profit in profits if profit > 0.01)
+            total_trades = len(profits)
+            profit_ratio = profitable_trades / total_trades if total_trades > 0 else 0
+            print(f"盈利大于0.01的比例: {profit_ratio:.2%}")
 
-            print("回测无可视化模式下已结束，继续后续操作...")
+def exhaustive_mode(basic_config, backtest_tick_price, data, type_data, base_trend_number, parquet_filename, parquet_index):
+    import itertools
+    import gc  # 导入垃圾回收模块
+    delay_range = [10, 30, 50]
+    filter_reverse_range = [True, False]
+    min_line_age_range = [50, 100, 150]
+    distance_threshold_range = [100, 200, 300]
+    filter_trending_line_number_range = [5, 10]
+    enter_threshold_range = [0.0003, 0.0006, 0.0009]
+    leave_threshold_range = [0.0003, 0.0006, 0.0009]
+    potential_profit_range = [0.002]
+    trailing_profit_threshold_range = [0.002, 0.004, 0.006]
+    trailing_stop_loss_range = [0.003, 0.005]
+    best_profit = -np.inf
+    best_params = None
+    results = []
+    # 保存初始的 base_trend_number 和 parquet_index，以便后续每轮都进行重置
+    original_base_trend_number = base_trend_number
+    original_parquet_index = parquet_index
+    for delay, filter_reverse, min_line_age, distance_threshold, filter_trending_line_number, enter_threshold, leave_threshold, potential_profit, trailing_profit_threshold, trailing_stop_loss in tqdm(
+        itertools.product(
+            delay_range,
+            filter_reverse_range,
+            min_line_age_range,
+            distance_threshold_range,
+            filter_trending_line_number_range,
+            enter_threshold_range,
+            leave_threshold_range,
+            potential_profit_range,
+            trailing_profit_threshold_range,
+            trailing_stop_loss_range
+        ),
+        desc="穷举中",
+        total=len(delay_range) * len(filter_reverse_range) * len(min_line_age_range) * len(distance_threshold_range) * len(filter_trending_line_number_range) * len(enter_threshold_range) * len(leave_threshold_range) * len(potential_profit_range) * len(trailing_profit_threshold_range) * len(trailing_stop_loss_range)
+    ):
+        # 每次试验前重置 base_trend_number 和 parquet_index
+        temp_base_trend_number = original_base_trend_number
+        temp_parquet_index = original_parquet_index
+        config = copy.deepcopy(basic_config)
+        config["trend_config"]["delay"] = delay
+        config["trend_config"]["filter_reverse"] = filter_reverse
+        config["trend_config"]["min_line_age"] = min_line_age
+        config["trend_config"]["distance_threshold"] = distance_threshold
+        config["trend_config"]["filter_trending_line_number"] = filter_trending_line_number
+        config["trading_config"]["enter_threshold"] = enter_threshold
+        config["trading_config"]["leave_threshold"] = leave_threshold
+        config["trading_config"]["potential_profit"] = potential_profit
+        config["trading_config"]["trailing_profit_threshold"] = trailing_profit_threshold
+        config["trading_config"]["trailing_stop_loss"] = trailing_stop_loss
+        trend_config = config["trend_config"]
+        trading_config = config["trading_config"]
+        # 将趋势间隔时间转换为毫秒单位
+        trend_config["interval"] = time_number(trend_config["interval"]) * 1000
+        # 开始回测：使用临时的 temp_base_trend_number 而非外部的 base_trend_number
+        backtester = Backtester(data, type_data, temp_base_trend_number)
+        initial_trend_data = backtester.initial_trend_data
+        # 过滤趋势
+        filter_trend = trend_filter(data, trend_config)
+        # 初始过滤趋势数据
+        initial_filtered_trend_data = filter_trend.filter_trend_initial(
+            initial_trend_data["trend_high"],
+            initial_trend_data["trend_low"],
+        )
+        # 初始化趋势价格计算器
+        trend_tick_calculator = TrendTickCalculator(data, trend_config, initial_filtered_trend_data)
+        # 初始化交易器
+        trader = Trader(data, trend_config, trading_config)
+        # 运行回测，每次均使用 temp_base_trend_number 和 temp_parquet_index
+        for current_trend in backtester.run_backtest():
+            # 过滤趋势
+            filtered_trend_data = filter_trend.process_new_trend(
+                initial_filtered_trend_data,
+                current_trend,
+            )
+            # 计算趋势价格
+            trend_tick_data = trend_tick_calculator.update_trend_data(data, temp_base_trend_number, filtered_trend_data)
+            # 获取价格时间数组
+            price_time_array = backtest_tick_price.package_data_loader(
+                temp_parquet_index, parquet_filename
+            )
+            temp_parquet_index += 1
+            trader.open_close_signal(data[temp_base_trend_number, [1, 3, 4, 5]], trend_tick_data, price_time_array, temp_base_trend_number)
+            temp_base_trend_number += 1
+        profits = [order['profit'] for order in trader.order_book]
+        profitable_trades = sum(1 for profit in profits if profit > 0.01)
+        total_trades = len(profits)
+        profit_ratio = profitable_trades / total_trades if total_trades > 0 else 0
+        print(f"盈利大于0.01的比例: {profit_ratio:.2%}")
+        results.append({
+            "trend_config": trend_config,
+            "trading_config": trading_config,
+            "profit_ratio": profit_ratio,
+        })
+        if profit_ratio > best_profit:
+            best_profit = profit_ratio
+            best_params = {
+                "trend_config": trend_config,
+                "trading_config": trading_config,
+            }
+            save_best_params(best_params)
+        print(f"当前盈利比例: {profit_ratio:.2%}")
+        # 显式删除不再使用的对象，并触发垃圾回收
+        del backtester, trader, trend_tick_calculator, filter_trend, initial_filtered_trend_data
+        gc.collect()
+    print(f"最佳参数: {best_params}")
+    print(f"最佳盈利比例: {best_profit:.2%}")
+    
+def save_best_params(best_params):
+    with open("best_params.yaml", "w") as f:
+        yaml.dump(best_params, f, default_flow_style=False)
 
-        backtest_elapsed_time = time.perf_counter() - start_time
-        print(f"回测耗时: {backtest_elapsed_time:.6f} 秒")
-        print(backtest_trader.history_order)
+def visulize_orderbook(trader):
+    order_book = trader.order_book
+    import matplotlib.pyplot as plt
+    from datetime import datetime  # 导入datetime模块
+
+    # 提取订单信息
+    order_ids = [order['order_id'] for order in order_book]
+    stop_losses = [order['stop_loss'] for order in order_book]
+    profits = [order['profit'] for order in order_book]
+    tick_times = [order['tick_time'] for order in order_book]  # 提取tick_time
+
+    # 将tick_time转换为可读格式，添加有效性检查
+    readable_times = []
+    for t in tick_times:
+        if t >= 0:  # 检查时间戳是否有效
+            readable_times.append(datetime.fromtimestamp(t / 1000).strftime('%d'))  # 转换为秒
+        else:
+            readable_times.append("Invalid Time")  # 无效时间处理
+
+    # 计算累计利润
+    cumulative_profits = [sum(profits[:i+1]) for i in range(len(profits))]
+
+    
+
+    # 创建图形
+    fig, axs = plt.subplots(2, 1, figsize=(12, 12))
+
+    # 绘制止损和盈利的订单
+    for i in range(len(order_ids)):
+        axs[0].scatter(readable_times[i], profits[i], color='green', label='Profit' if i == 0 else "")
+
+    # 添加图例
+    axs[0].legend()
+    axs[0].set_title('Order Profit/Loss Visualization')
+    axs[0].set_xlabel('Tick Time')  # 更新横坐标标签
+    axs[0].set_ylabel('Profit')
+    axs[0].axhline(0, color='black', linewidth=0.8, linestyle='--')  # 添加水平线表示盈亏平衡点
+    axs[0].grid()
+
+    # 绘制累计利润
+    axs[1].plot(readable_times, cumulative_profits, color='blue', label='Cumulative Profit')  # 更新横坐标
+    axs[1].set_title('Cumulative Profit Visualization')
+    axs[1].set_xlabel('Tick Time')  # 更新横坐标标签
+    axs[1].set_ylabel('Cumulative Profit')
+    axs[1].axhline(0, color='black', linewidth=0.8, linestyle='--')  # 添加水平线表示盈亏平衡点
+    axs[1].grid()
+
+    # 显示图形
+    plt.savefig("frames/orderbook.png")
+    plt.show()
+    
+    
+    # print(order_book)
 
 if __name__ == "__main__":
+    # import cProfile
+    # cProfile.run("main()", sort="cumulative")
     main()
+    
+# %%

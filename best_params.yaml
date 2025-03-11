@@ -1,0 +1,24 @@
+trading_config:
+  enter_threshold: 0.0003
+  fee: 0.001
+  further_sight: 50
+  leave_threshold: 0.003
+  number: 1
+  open_times: 2
+  potential_profit: 0.002
+  stop_loss: 0.003
+  trailing_profit_threshold: 0.002
+  trailing_stop_loss: 0.005
+trend_config:
+  delay: 30
+  distance_threshold: 300
+  enable_filter: true
+  filter_distance: true
+  filter_line_age: true
+  filter_reverse: true
+  filter_slope: false
+  filter_trending_line: true
+  filter_trending_line_number: 5
+  interval: 300000
+  min_line_age: 100
+  slope_threshold: 0.0001

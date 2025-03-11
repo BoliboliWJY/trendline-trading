@@ -13,7 +13,7 @@ def setup_plot_lines(plot, visual_number):
             "name": "high_low_green",
             "color": "green",
             "width": linewidth,
-            "columns": [0, 2, 0, 1],
+            "columns": [2, 3, 0, 1],
             "connect": "pairs",
             "condition": lambda type_val: type_val == 0,
         },
@@ -21,26 +21,26 @@ def setup_plot_lines(plot, visual_number):
             "name": "high_low_red",
             "color": "red",
             "width": linewidth,
-            "columns": [0, 2, 0, 1],
+            "columns": [2, 3, 0, 1],
             "connect": "pairs",
             "condition": lambda type_val: type_val == 1,
         },
-        {
-            "name": "open_close_green",
-            "color": "green",
-            "width": 2 * linewidth,
-            "columns": [0, 3, 0, 4],
-            "connect": "pairs",
-            "condition": lambda type_val: type_val == 0,
-        },
-        {
-            "name": "open_close_red",
-            "color": "red",
-            "width": 2 * linewidth,
-            "columns": [0, 3, 0, 4],
-            "connect": "pairs",
-            "condition": lambda type_val: type_val == 1,
-        },
+        # {
+        #     "name": "open_close_green",
+        #     "color": "green",
+        #     "width": 2 * linewidth,
+        #     "columns": [-1, 4, -1, 5],
+        #     "connect": "pairs",
+        #     "condition": lambda type_val: type_val == 0,
+        # },
+        # {
+        #     "name": "open_close_red",
+        #     "color": "red",
+        #     "width": 2 * linewidth,
+        #     "columns": [-1, 4, -1, 5],
+        #     "connect": "pairs",
+        #     "condition": lambda type_val: type_val == 1,
+        # },
     ]
     # 初始化绘图对象
     plot_lines = {}
@@ -65,6 +65,10 @@ def setup_plot_lines(plot, visual_number):
         [], [], pen=horizontal_pen_low, name="Horizontal Low"
     )
 
+    plot_lines["price_time"] = plot.plot(
+        [], [], pen=None, symbol="o", symbolBrush=(255, 255, 255, 100), symbolSize=3, name="Price Time"
+    )
+    
     # 初始化多空标记点
     plot_lines["long"] = plot.plot(
         [], [], pen=None, symbol="o", symbolBrush="green", symbolSize=20, name="Long"
@@ -73,17 +77,47 @@ def setup_plot_lines(plot, visual_number):
         [], [], pen=None, symbol="o", symbolBrush="red", symbolSize=20, name="Short"
     )
 
-    plot_lines["high_bounce"] = plot.plot(
-        [], [], pen=None, symbol="x", symbolBrush="blue", symbolSize=10, name="High Bounce"
+    # 开仓信号点
+    plot_lines["high_open"] = plot.plot(
+        [], [], pen=None, symbol="x", symbolBrush=(0,128,255), symbolSize=15, name="High Open"
     )
-    plot_lines["low_bounce"] = plot.plot(
-        [], [], pen=None, symbol="x", symbolBrush="yellow", symbolSize=10, name="Low Bounce"
+    plot_lines["low_open"] = plot.plot(
+        [], [], pen=None, symbol="x", symbolBrush=(255,0,255), symbolSize=15, name="Low Open"
     )
+    plot_lines["high_open_enter"] = plot.plot(
+        [], [], pen=None, symbol="o", symbolBrush=(102,178,155), symbolSize=5, name="High Open Enter"
+    )
+    plot_lines["low_open_enter"] = plot.plot(
+        [], [], pen=None, symbol="o", symbolBrush=(255,102,255), symbolSize=5, name="Low Open Enter"
+    )
+    plot_lines["sell_close_ideal"] = plot.plot(
+        [], [], pen=None, symbol="x", symbolBrush=(0,0,102), symbolSize=15, name="Sell Close Ideal"
+    )
+    plot_lines["buy_close_ideal"] = plot.plot(
+        [], [], pen=None, symbol="x", symbolBrush=(102,0,51), symbolSize=15, name="Buy Close Ideal"
+    )
+    
+    # 平仓信号点
     plot_lines["high_close"] = plot.plot(
-        [], [], pen=None, symbol="x", symbolBrush="purple", symbolSize=10, name="High Close"
+        [], [], pen=None, symbol="x", symbolBrush="purple", symbolSize=15, name="High Close"
     )
     plot_lines["low_close"] = plot.plot(
-        [], [], pen=None, symbol="x", symbolBrush="orange", symbolSize=10, name="Low Close"
+        [], [], pen=None, symbol="x", symbolBrush="orange", symbolSize=15, name="Low Close"
     )
+    
+    
+    
+    plot_lines["trend_price_high"] = plot.plot(
+        [], [], pen=None, symbol="o", symbolBrush=(0, 255, 0, 100), symbolSize=10, name="Trend Price High"
+    )
+    plot_lines["trend_price_low"] = plot.plot(
+        [], [], pen=None, symbol="o", symbolBrush=(255, 0, 0, 100), symbolSize=10, name="Trend Price Low"
+    )
+    
+    # 提前绘制一些k线
+    pre_pen_green = pg.mkPen(color=(0, 255, 0, 100), width=linewidth, style=QtCore.Qt.SolidLine)
+    pre_pen_red   = pg.mkPen(color=(255, 0, 0, 100), width=linewidth, style=QtCore.Qt.SolidLine)
+    plot_lines["pre_high_low_green"] = plot.plot([], [], pen=pre_pen_green, connect="pairs", name="Pre High Low Green")
+    plot_lines["pre_high_low_red"]   = plot.plot([], [], pen=pre_pen_red, connect="pairs", name="Pre High Low Red")
 
     return plot_lines, plot_configs

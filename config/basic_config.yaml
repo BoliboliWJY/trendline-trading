@@ -1,6 +1,7 @@
 key: 'uiY3WGKVNEaCkntmyikLCALO9O63PBAYcVDwLw0Xu66AgcrEBXab0UANMbWZOsj4'
 secret: 'O7zn1HEFTr0e9msT1m52Nu6utZtIkmicRsbUtpSJSdVJrTlLs2NIVLLhiwALXKez'
 coin_type: 'BTCUSDT'
+contract_type: 'USD_margined'
 # aim_time: '2025-2-10  19:30:00'
 # total_length: 10000
 # aim_time: '2024-11-1  19:30:00'
@@ -8,45 +9,51 @@ coin_type: 'BTCUSDT'
 # aim_time: '2024-8-1  19:30:00'
 # total_length: 100000
 interval: '5m'
-
+exhaustive_mode: False # 是否进行穷举,以此优化参数
 visualize_mode: True
 visual_number: 200
+
+
 
 # 设定运行模式:1为实测，0为回测
 run_type: 0
 
 backtest_config:
-  backtest_start_time: '2024-10-10'
-  backtest_end_time: '2024-12-31'
-  backtest_calculate_time: '2024-12-01'
+  backtest_start_time: '2024-11-10'
+  # backtest_start_time: '2024-11-30'
+  backtest_end_time: '2025-2-31'
+  backtest_calculate_time: '2025-2-01'
 
 # 过滤趋势配置参数
 trend_config:
   enable_filter: True # 是否启用过滤
-  delay: 10                    # 生成延迟
-  interval: '5m'              # 注意此处与顶层 interval 保持一致，可在代码中转换成毫秒
-  filter_reverse: False      # 反转限制: False 表示不过滤
-  filter_slope: False        # 斜率大小限制: False 表示不过滤
-  slope_threshold: 0.0001       # 最大斜率阈值
+  delay: 30                    # 生成延迟, 2为无延迟
+  filter_slope: False       # 斜率大小限制: False 表示不过滤
+  slope_threshold: 0.0001      # 最大斜率阈值
+  filter_reverse: True     # 反转限制: False 表示不过滤
   filter_line_age: True       # 趋势年龄限制
-  min_line_age: 100          # 最小趋势年龄阈值
+  min_line_age: 100         # 最小趋势年龄阈值
   filter_distance: True       # 距离限制，不能太近
-  distance_threshold: 200     # 最小距离阈值
+  distance_threshold: 300     # 最小距离阈值
   filter_trending_line: True  # 处于趋势之中的线不考虑
-  filter_trending_line_number: 10  # 连接当前点趋势的线数量阈值
+  filter_trending_line_number: 5  # 连接当前点趋势的线数量阈值
+
+  interval: '5m'              # 注意此处与顶层 interval 保持一致，可在代码中转换成毫秒
 
 # 交易策略配置参数
 trading_config:
   open_times: 2 # 限定单k线开仓次数
   # 0.01就是1%
   fee: 0.001 # 手续费
-  stop_loss: 0.007 # 止损
+  stop_loss: 0.002 # 止损
   # take_profit: 0.001 # 止盈
   
-  enter_threshold: 0.0005 # 趋势线对应价格与当前价格差距
-  leave_threshold: 0.001 # 离开趋势线后，价格与趋势线对应价格差距
+  enter_threshold: 0.0003 # 趋势线对应价格与当前价格差距
+  leave_threshold: 0.003 # 离开趋势线后，价格与趋势线对应价格差距
   number: 1 # 小于阈值的趋势线数量
-  potential_profit: 0.02 # 潜在利润
+  potential_profit: 0.002 # 潜在利润
 
-  trailing_profit_threshold: 0.004 # 移动止损开启利润空间阈值
-  trailing_stop_loss: 0.003 # 移动止损可接受的反弹值
+  trailing_profit_threshold: 0.002 # 移动止损开启利润空间阈值
+  trailing_stop_loss: 0.005 # 移动止损可接受的反弹值
+
+  further_sight: 500 # 观察未来50根k线结果出现止损或盈利情况
