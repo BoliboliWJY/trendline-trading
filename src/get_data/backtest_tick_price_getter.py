@@ -5,6 +5,7 @@ import zipfile
 import polars as pl
 import numpy as np
 import tqdm
+import time
 
 class BacktestTickPriceManager:
     def __init__(
@@ -12,10 +13,12 @@ class BacktestTickPriceManager:
         coin_type: str,
         backtest_start_time: str,
         backtest_end_time: str,
+        contract_type: str,
     ):
         self.coin_type = coin_type
         self.backtest_start_time = backtest_start_time
         self.backtest_end_time = backtest_end_time
+        self.contract_type = contract_type
 
         self.start_date = datetime.strptime(backtest_start_time, "%Y-%m-%d")
         self.end_date = datetime.strptime(backtest_end_time, "%Y-%m-%d")
@@ -23,7 +26,8 @@ class BacktestTickPriceManager:
 
     def package_data(self, start_time_number, end_time_number, base_filename):
         """
-        将时间戳和价格数据打包成一个数组
+        将时间戳和价格数据打包成一个数组，
+        如果检测到 time 数据的单位为 microseconds 则转换为 milliseconds。
         """
         folder = os.path.dirname(base_filename)
         if folder and not os.path.exists(folder):
@@ -34,12 +38,19 @@ class BacktestTickPriceManager:
             print(f"文件 {first_chunk_file} 已存在，跳过读取和打包。")
             return
 
-        # 如果未检测到文件，则读取 csv 文件后进行后续操作
+        # 如果未检测到文件，则读取 csv 数据后进行后续操作
         self.tick_price = self.get_tick_price()
+
+        # 检查 time 字段的最大值是否异常大，
+        # 与当前时间的毫秒数进行比较，判断是否为 microseconds 单位
+        current_time_ms = int(time.time() * 1000)
+        max_time = self.combined_df["time"].max()
+        if max_time > current_time_ms * 2:  # 如果 max_time 明显比当前毫秒时间大，视为 microseconds
+            print("检测到 time 字段单位为 microseconds，转换为 milliseconds")
+            self.combined_df = self.combined_df.with_columns((pl.col("time") / 1000).alias("time"))
+
         time_series = self.combined_df["time"]
-        for i, (start_time, end_time) in enumerate(
-            zip(start_time_number, end_time_number)
-        ):
+        for i, (start_time, end_time) in enumerate(zip(start_time_number, end_time_number)):
             # 构建输出文件名
             filename = f"{base_filename}_chunk_{i}.parquet"
             start_idx = time_series.search_sorted(start_time, side="right")
@@ -62,7 +73,7 @@ class BacktestTickPriceManager:
                 )
 
         self.dfs = []
-        self.base_folder = os.path.join("backtest", "tick", self.coin_type)
+        self.base_folder = os.path.join("backtest", self.contract_type, "tick", self.coin_type)
         for month in self.months:
             csv_file_name = f"{self.coin_type}-trades-{month}.csv"
             zip_file_name = f"{self.coin_type}-trades-{month}.zip"
@@ -74,6 +85,15 @@ class BacktestTickPriceManager:
             if os.path.exists(csv_file_path):
                 try:
                     df = pl.read_csv(csv_file_path)
+                    # 如果没有 "time" 列，则认为 CSV 文件没有标题，
+                    # 按照第二列作为 "price"，第五列作为 "time" 重命名
+                    if "time" not in df.columns:
+                        cols = list(df.columns)
+                        if len(cols) >= 5:
+                            df = df.rename({cols[0]: "id", cols[1]: "price", cols[2]: "qty", cols[3]: "quote_qty", cols[4]: "time", cols[5]: "is_buyer_maker"})
+                        else:
+                            print(f"文件 {csv_file_path} 不含足够列进行重命名.")
+                            continue
                     self.dfs.append(df)
                 except Exception as e:
                     print(f"无法读取文件 {csv_file_path}: {e}")
@@ -83,6 +103,13 @@ class BacktestTickPriceManager:
                     with zipfile.ZipFile(zip_file_path, "r") as zf:
                         with zf.open(csv_file_name) as f:
                             df = pl.read_csv(f)
+                            if "time" not in df.columns:
+                                cols = list(df.columns)
+                                if len(cols) >= 5:
+                                    df = df.rename({cols[0]: "id", cols[1]: "price", cols[2]: "qty", cols[3]: "quote_qty", cols[4]: "time", cols[5]: "is_buyer_maker"})
+                                else:
+                                    print(f"压缩包 {zip_file_path} 中的 {csv_file_name} 不含足够列进行重命名.")
+                                    continue
                             self.dfs.append(df)
                 except Exception as e:
                     print(f"无法从压缩包 {zip_file_path} 读取文件 {csv_file_name}: {e}")
@@ -163,6 +190,7 @@ class BacktestTickPriceManager:
         length,
         backtest_start_time,
         backtest_end_time,
+        contract_type,
     ):
         """
         修改数据。在执行后续修改前，先检查是否已处理过数据，
@@ -226,13 +254,13 @@ class BacktestTickPriceManager:
                 data[i + base_trend_number, 3] = min_price
 
         self.save_modified_data(
-            data, coin_type, interval, length, backtest_start_time, backtest_end_time
+            data, coin_type, interval, length, backtest_start_time, backtest_end_time, contract_type
         )
 
         return data
 
     def save_modified_data(
-        self, data, coin_type, interval, length, backtest_start_time, backtest_end_time
+        self, data, coin_type, interval, length, backtest_start_time, backtest_end_time, contract_type
     ):
         """
         将修改后的 data 根据 backtest_filename_getter 返回的路径模式保存到文件中
@@ -250,7 +278,7 @@ class BacktestTickPriceManager:
 
         # 根据 coin_type、interval 等参数获取保存的路径和文件名
         filename, typename = get_backtest_filename(
-            coin_type, interval, length, backtest_start_time, backtest_end_time
+            coin_type, interval, length, backtest_start_time, backtest_end_time, contract_type
         )
 
         try:

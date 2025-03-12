@@ -1,3 +1,3 @@
-from src.data_fetcher import get_data_in_batches
+from src.get_data.get_data_in_batches import get_data_in_batches
 from src.time_number import time_number
 from src.trend_calculator.trend_process import calculate_trend, initial_single_slope
