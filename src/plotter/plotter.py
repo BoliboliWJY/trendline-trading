@@ -91,7 +91,7 @@ class Plotter:
         self.plot_in_one()
 
     def update_plot(
-        self, current_trend, open_signals, close_signals, tick_index, price_time_array, trend_price
+        self, current_trend, open_signals, close_signals, tick_index, price_time_array, trend_price, data, type_data
     ):
         self.trend_high = current_trend["trend_high"]
         self.trend_low = current_trend["trend_low"]
@@ -101,6 +101,9 @@ class Plotter:
         self.price_time_array = price_time_array
         self.trend_price_high = trend_price["trend_price_high"]
         self.trend_price_low = trend_price["trend_price_low"]
+        self.data = data
+        self.type_data = type_data
+        
         self.current_data = self.data[
             self.start_index
             + self.frame_count : self.start_index
@@ -289,23 +292,18 @@ class Plotter:
         并根据 tick_price_key 获取对应数据，更新指定 bounce_key 的数据。
         """
         trade_data = signals.get(tick_price_key, None)
-        tick_price = [signal[1] for signal in trade_data]
-        tick_time = [signal[0] for signal in trade_data]
-        if tick_price is not None:
-            tick_price = np.array(tick_price)
-            x_data = tick_time
-            y_data = tick_price
+        
+        # 添加类型检查和空值处理
+        if trade_data is not None and len(trade_data) > 0:
+            tick_price = [float(signal[1]) for signal in trade_data]  # 确保转换为浮点数
+            tick_time = [float(signal[0]) for signal in trade_data]   # 确保转换为浮点数
+            x_data = np.array(tick_time, dtype=np.float64)
+            y_data = np.array(tick_price, dtype=np.float64)
         else:
-            x_data, y_data = [], []
+            x_data, y_data = np.array([]), np.array([])  # 确保使用空数组而不是列表
             
         self.safe_update_plot_line(tick_price_key, x_data, y_data)
-
         snapshot[tick_price_key] = (x_data, y_data)
-        # if not np.array_equal(
-        #     self.plot_lines[point_key].getData()[0], x_data
-        # ) or not np.array_equal(self.plot_lines[point_key].getData()[1], y_data):
-        #     self.safe_update_plot_line(point_key, x_data, y_data)
-        #     snapshot[point_key] = (x_data, y_data)
 
     def refresh_frame(self):
         if self.plot_cache and 0 <= self.current_snapshot_index < len(self.plot_cache):

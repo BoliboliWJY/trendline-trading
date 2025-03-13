@@ -93,27 +93,72 @@ def main():
         backtester = Backtester(data, type_data)
         initial_trend_data = backtester.initial_trend_data
         filter_trend = trend_filter(data,trend_config)
-        initial_filtered_trend_data = filter_trend.filter_trend_initial(
+        filtered_trend_data = filter_trend.filter_trend_initial(
             initial_trend_data["trend_high"],
             initial_trend_data["trend_low"],
         )
+        # 初始化趋势价格计算器
+        trend_tick_calculator = TrendTickCalculator(data, trend_config, filtered_trend_data)
+
         # trader = Trader(data, trend_config, trading_config)
         
         # plotter = Plotter(
         #         data,
         #         type_data,
-        #         initial_filtered_trend_data,
+        #         filtered_trend_data,
         #         len(data),
         #         1000,
         #         10,
         #     )
+        # plotter.run()
         # while True:
         #     plotter.run()
         
         new_price = NewPrice(client, coin_type, contract_type)
         order_manager = OrderManager()
         trader = RealtimeTrader(data, trend_config, trading_config, order_manager)
-        current_price = new_price.__next__()
+        while True:
+            current_tick_info = new_price.__next__()
+            current_time = current_tick_info["time"]# 获取当前时间
+            current_price = current_tick_info["price"]
+
+            print("未获取到新k线")
+            time.sleep(1)
+            
+            if current_time - data[-1, 7] > time_number(interval) * 1000:
+                # 新增K线数
+                kline_num = int((current_time - data[-1, 7]) // (time_number(interval) * 1000) + 1)
+                new_kline, new_type_data = get_latest_klines(client, coin_type, interval, 2)
+                data = np.concatenate((data, new_kline), axis=0)
+                type_data = np.concatenate((type_data, new_type_data), axis=0)
+                # 更新趋势数据
+                trend_generator = backtester.run_backtest(data, type_data)
+                current_trend = next(trend_generator)
+                # 过滤趋势
+                filtered_trend_data = filter_trend.process_new_trend(
+                    filtered_trend_data,
+                    current_trend,
+                )
+                # 计算趋势价格
+                trend_tick_data = trend_tick_calculator.update_trend_data(data, current_time, filtered_trend_data)
+                trader.update_trend_price(data, trend_tick_data)
+                
+                
+                # plotter.enable_visualization = True
+                # plotter.update_plot(
+                #     filtered_trend_data,
+                #     trader.open_signals,
+                #     trader.close_signals,
+                #     data[-1, -1],
+                #     np.array([]),
+                #     trend_tick_data,
+                #     data,
+                #     type_data,
+                # )
+
+                # plotter.run()
+                
+                
         
 
         # 如果需要继续添加其它实盘操作，可在此后添加
@@ -216,13 +261,13 @@ def main():
         # 过滤趋势
         filter_trend = trend_filter(data,trend_config)
         # 初始过滤趋势数据
-        initial_filtered_trend_data = filter_trend.filter_trend_initial(
+        filtered_trend_data = filter_trend.filter_trend_initial(
             initial_trend_data["trend_high"],
             initial_trend_data["trend_low"],
         )  
         
         # 初始化趋势价格计算器
-        trend_tick_calculator = TrendTickCalculator(data, trend_config, initial_filtered_trend_data)
+        trend_tick_calculator = TrendTickCalculator(data, trend_config, filtered_trend_data)
         
         # # 初始化交易器
         trader = BacktestTrader(data, trend_config, trading_config)
@@ -236,7 +281,7 @@ def main():
             plotter = Plotter(
                 data,
                 type_data,
-                initial_filtered_trend_data,
+                filtered_trend_data,
                 base_trend_number,
                 visual_number,
                 cache_len,
@@ -249,6 +294,7 @@ def main():
             
             idx_draw = 0
             
+            
             with tqdm(desc="Backtesting Progress", mininterval=1) as pbar:
                 for current_trend in backtester.run_backtest():
                     while plotter.paused:
@@ -257,12 +303,12 @@ def main():
                     
                     # 过滤趋势
                     filtered_trend_data = filter_trend.process_new_trend(
-                        initial_filtered_trend_data,
+                        filtered_trend_data,
                         current_trend,
                     )
                     
                     # 计算趋势价格
-                    trend_tick_data = trend_tick_calculator.update_trend_data(data, base_trend_number, filtered_trend_data)
+                    trend_tick_data = trend_tick_calculator.update_trend_data(data, data[base_trend_number, -1], filtered_trend_data)
                     
                     # 获取价格时间数组
                     price_time_array = backtest_tick_price.package_data_loader(
@@ -288,9 +334,11 @@ def main():
                         filtered_trend_data,
                         open_signals,
                         close_signals,
-                        base_trend_number,
+                        data[base_trend_number, -1],
                         price_time_array,
                         trend_tick_data,
+                        data,
+                        type_data,
                     )
                     
                     plotter.run()
@@ -324,12 +372,12 @@ def main():
                     
                     # 过滤趋势
                     filtered_trend_data = filter_trend.process_new_trend(
-                        initial_filtered_trend_data,
+                        filtered_trend_data,
                         current_trend,
                     )
                     
                     # 计算趋势价格
-                    trend_tick_data = trend_tick_calculator.update_trend_data(data, base_trend_number, filtered_trend_data)
+                    trend_tick_data = trend_tick_calculator.update_trend_data(data, data[base_trend_number, -1], filtered_trend_data)
                     
                     # 获取价格时间数组
                     price_time_array = backtest_tick_price.package_data_loader(
@@ -418,7 +466,7 @@ def exhaustive_mode(basic_config, backtest_tick_price, data, type_data, base_tre
         # 初始化趋势价格计算器
         trend_tick_calculator = TrendTickCalculator(data, trend_config, initial_filtered_trend_data)
         # 初始化交易器
-        trader = Trader(data, trend_config, trading_config)
+        trader = BacktestTrader(data, trend_config, trading_config)
         # 运行回测，每次均使用 temp_base_trend_number 和 temp_parquet_index
         for current_trend in backtester.run_backtest():
             # 过滤趋势
@@ -427,7 +475,7 @@ def exhaustive_mode(basic_config, backtest_tick_price, data, type_data, base_tre
                 current_trend,
             )
             # 计算趋势价格
-            trend_tick_data = trend_tick_calculator.update_trend_data(data, temp_base_trend_number, filtered_trend_data)
+            trend_tick_data = trend_tick_calculator.update_trend_data(data, data[temp_base_trend_number, -1], filtered_trend_data)
             # 获取价格时间数组
             price_time_array = backtest_tick_price.package_data_loader(
                 temp_parquet_index, parquet_filename

@@ -15,6 +15,10 @@ class RealtimeTrader:
         self.sell_candidate = None  
         self.buy_candidate = None
         
+        # 用于记录开仓和平仓信号,方便可视化
+        self.open_signals = {"high_open":[], "low_open":[], "high_open_enter":[], "low_open_enter":[], "sell_close_ideal":[], "buy_close_ideal":[]}
+        self.close_signals = {"high_close":[], "low_close":[]}
+        
     def update_trend_price(self, data, trend_price:np.ndarray):
         """
         更新趋势价格

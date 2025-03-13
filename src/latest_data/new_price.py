@@ -4,6 +4,9 @@ class NewPrice():
         self.client = client
         self.coin_type = coin_type
         self.contract_type = contract_type
+        
+        ping_result = self.client.ping()
+        print(ping_result)
 
     def __next__(self):
         """获取最新价格数据

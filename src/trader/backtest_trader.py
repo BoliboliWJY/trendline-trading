@@ -77,7 +77,7 @@ class BacktestTrader:
         if sell_enter_val < self.trading_config["enter_threshold"] and sell_profit_val > self.trading_config["potential_profit"]:
             # print("出现潜在卖出开仓信号, 进入阈值/打破趋势线")
             # print("最高价格", self.max_price, "趋势价格", trend_price_high[0, 1], "相差", sell_enter_val)
-            # self.paused = True # 暂停可视化
+            self.paused = True # 暂停可视化
             self.sell_open_potential_signal = True # 出现潜在卖出开仓信号
             # self.buy_open_potential_signal = False # 重置潜在买入开仓信号
             # self.sell_open_potential_signal_last = True
@@ -85,7 +85,7 @@ class BacktestTrader:
         elif buy_enter_val < self.trading_config["enter_threshold"] and buy_profit_val > self.trading_config["potential_profit"]:
             # print("出现潜在买入开仓信号, 进入阈值/打破趋势线")
             # print("最低价格", self.min_price, "趋势价格", trend_price_low[0, 1], "相差", buy_enter_val)
-            # self.paused = True # 暂停可视化
+            self.paused = True # 暂停可视化
             self.buy_open_potential_signal = True # 出现潜在买入开仓信号
             # self.sell_open_potential_signal = False # 重置潜在卖出开仓信号
             # self.buy_open_potential_signal_last = True

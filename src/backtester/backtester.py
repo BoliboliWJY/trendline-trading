@@ -69,7 +69,7 @@ class Backtester:
     def update_trend(self):
         """更新一次趋势数据，并返回更新后的数据; 如果数据结束则返回 False"""
         end_index = self.base_trend_number + self.backtest_count
-        if end_index >= len(self.data):
+        if end_index > len(self.data):
             print("Reached end of data. Stopping the backtest.")
             return False  # 如果数据结束，返回 False
 
@@ -105,9 +105,11 @@ class Backtester:
         return removing_item, removed_items
 
     # @profile_method
-    def run_backtest(self, new_data = []):
-        if new_data != []:
-            self.data = np.concatenate((self.data, new_data.reshape(1, -1)), axis=0)
+    def run_backtest(self, new_data = None, new_type_data = None):
+        if new_data is not None and len(new_data) > 0:
+            self.data = new_data
+        if new_type_data is not None and len(new_type_data) > 0:
+            self.type_data = new_type_data
         """运行回测，同时可通过返回的趋势数据进行可视化"""
         while True:
             result = self.update_trend()

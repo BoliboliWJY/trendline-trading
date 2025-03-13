@@ -15,7 +15,7 @@ def get_latest_klines(client, coin_type, interval, total_length):
         type_data:升/降价格数据
         """
     current_time = int(time.time())
-    limit = total_length if total_length < 1000 else 1000
+    limit = total_length - 1 if total_length < 1000 else 1000
     start_time = current_time - time_number(interval) * total_length
-    data, type_data = get_data_in_batches(client, coin_type, interval, total_length, start_time, limit)
+    data, type_data = get_data_in_batches(client, coin_type, interval, total_length - 1, start_time, limit)
     return data, type_data

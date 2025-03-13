@@ -79,7 +79,7 @@ class trend_filter:
             trend_high = self.filter_by_trending_line(trend_high, is_high=True)
             trend_low = self.filter_by_trending_line(trend_low, is_high=False)
 
-        return {"trend_high": trend_high, "trend_low": trend_low}  # 返回初始过滤后的趋势数据
+        return {"trend_high": trend_high, "trend_low": trend_low, "deleted_high": [], "deleted_low": []}  # 返回初始过滤后的趋势数据
 
     def filter_by_reverse(self, trend, is_high):
         """过滤反转趋势"""
