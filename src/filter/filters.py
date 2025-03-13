@@ -27,7 +27,7 @@ class trend_filter:
         """
         enable_filter = self.config.get("enable_filter", True)
         if not enable_filter:
-            return {"trend_high": trend_high, "trend_low": trend_low}
+            return {"trend_high": trend_high, "trend_low": trend_low, "deleted_high": [], "deleted_low": []}
 
         # 反转限制
         self.delay = self.config.get("delay", 10) - 1

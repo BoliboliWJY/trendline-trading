@@ -99,28 +99,46 @@ def main():
         )
         # 初始化趋势价格计算器
         trend_tick_calculator = TrendTickCalculator(data, trend_config, filtered_trend_data)
-
+        trend_tick_data = trend_tick_calculator.update_trend_data(data, data[-1, -1] + trend_config["interval"], filtered_trend_data)
         # trader = Trader(data, trend_config, trading_config)
+        initial_filtered_trend_data = filtered_trend_data
+        initial_filtered_trend_data["trend_high"] = filtered_trend_data["trend_high"][:-1]
+        initial_filtered_trend_data["trend_low"] = filtered_trend_data["trend_low"][:-1]
+        plotter = Plotter(
+                data[:-1],
+                type_data[:-1],
+                initial_filtered_trend_data,
+                len(data[:-1]),
+                1000,
+                10,
+            )
         
-        # plotter = Plotter(
-        #         data,
-        #         type_data,
-        #         filtered_trend_data,
-        #         len(data),
-        #         1000,
-        #         10,
-        #     )
-        # plotter.run()
-        # while True:
-        #     plotter.run()
+        plotter.enable_visualization = True
+        plotter.update_plot(
+            filtered_trend_data,
+            {"high_open":[], "low_open":[], "high_open_enter":[], "low_open_enter":[], "sell_close_ideal":[], "buy_close_ideal":[]},
+            {"high_close":[], "low_close":[]},
+            data[-1, -1],
+            np.array([]),
+            trend_tick_data,
+            data,
+            type_data,
+        )
+        plotter.run()
+        while True:
+            plotter.run()
         
         new_price = NewPrice(client, coin_type, contract_type)
         order_manager = OrderManager()
         trader = RealtimeTrader(data, trend_config, trading_config, order_manager)
+        
+        
         while True:
             current_tick_info = new_price.__next__()
             current_time = current_tick_info["time"]# 获取当前时间
             current_price = current_tick_info["price"]
+            
+            trader.open_close_signal(current_time, current_price)
 
             print("未获取到新k线")
             time.sleep(1)
@@ -144,19 +162,19 @@ def main():
                 trader.update_trend_price(data, trend_tick_data)
                 
                 
-                # plotter.enable_visualization = True
-                # plotter.update_plot(
-                #     filtered_trend_data,
-                #     trader.open_signals,
-                #     trader.close_signals,
-                #     data[-1, -1],
-                #     np.array([]),
-                #     trend_tick_data,
-                #     data,
-                #     type_data,
-                # )
+                plotter.enable_visualization = True
+                plotter.update_plot(
+                    filtered_trend_data,
+                    trader.open_signals,
+                    trader.close_signals,
+                    data[-1, -1],
+                    np.array([]),
+                    trend_tick_data,
+                    data,
+                    type_data,
+                )
 
-                # plotter.run()
+                plotter.run()
                 
                 
         

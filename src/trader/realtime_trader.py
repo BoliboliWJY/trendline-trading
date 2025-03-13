@@ -27,12 +27,13 @@ class RealtimeTrader:
         self.trend_price_high = trend_price["trend_price_high"][:, 1] # 对应k线下的价格
         self.trend_price_low = trend_price["trend_price_low"][:, 1]
         
-    def open_close_signal(self, current_tick_info):
+    def open_close_signal(self, current_tick_time, current_tick_price):
         """
         根据趋势价格和价格时间数组，生成开仓和平仓信号
+        此处不更新趋势价格，仅根据当前价格生成信号
         """
-        time = current_tick_info["time"]
-        tick_price = current_tick_info["price"]
+        time = current_tick_time
+        tick_price = current_tick_price
         
         # 做空进入阈值  
         sell_enter_val = 1 - tick_price / self.trend_price_high[0] if self.trend_price_high.size > 0 else self.trading_config["enter_threshold"] + 1
