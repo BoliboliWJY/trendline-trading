@@ -17,7 +17,8 @@ class NewPrice():
         current_price:最新价格
         """
         if self.contract_type == 'futures':
-            current_price_info = self.client.get_symbol_ticker(symbol=self.coin_type)
+            # current_price_info = self.client.get_symbol_ticker(symbol=self.coin_type)
+            current_price_info = self.client.ticker_price(symbol=self.coin_type)
         else:
             current_price_info = self.client.ticker_price(symbol=self.coin_type)
         current_price = current_price_info

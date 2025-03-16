@@ -16,7 +16,7 @@ import gc  # 导入垃圾回收模块
 
 # from binance.spot import Spot as Client
 from binance.um_futures import UMFutures  # 导入U本位合约市场客户端
-
+from src.coin_info import CoinInfo
 
 # from binance import Client
 from src.config_manager import load_basic_config
@@ -37,10 +37,8 @@ from src.get_data.backtest_tick_price_getter import BacktestTickPriceManager
 # 趋势价格计算器
 from src.backtester.trend_tick_calculator import TrendTickCalculator
 
-# 订单簿记录
-from src.order_book.order_booker import OrderBook
-# 订单管理器
-from src.order_book.order_manager import OrderManager
+# 订单簿记录，开仓，订单管理器
+from src.order_book import OrderBook, open_order, OrderManager
 # 回测交易器
 from src.trader.backtest_trader import BacktestTrader
 # 实时交易器
@@ -59,8 +57,8 @@ def main():
 
     # 加载基本配置
     basic_config = load_basic_config("config/basic_config.yaml")
-    key = basic_config["key"]
-    secret = basic_config["secret"]
+    key = basic_config["api_key"]
+    secret = basic_config["api_secret"]
     coin_type = basic_config["coin_type"]
     contract_type = basic_config["contract_type"]
     # aim_time_str = basic_config["aim_time"]
@@ -74,9 +72,12 @@ def main():
     trend_config["interval"] = time_number(trend_config["interval"]) * 1000
     
 
-
-    # 创建 Binance 客户端
-    client = UMFutures(key, secret)
+    if basic_config["client_testnet"]:# 是不是模拟盘
+        client = UMFutures(key, secret, base_url="https://testnet.binancefuture.com")
+    else:
+        client = UMFutures(key, secret)
+        
+    coin_info = CoinInfo(client, coin_type, contract_type, 10)
 
     # --------------------------
     # 分情况处理：实盘交易模式 / 回测模式
@@ -85,10 +86,11 @@ def main():
         # ---------------------
         # 实盘交易模式
         # ---------------------
+        client.ping() # 测试连接
         realtime_config = basic_config["realtime_config"]
         total_length = realtime_config["total_length"]
 
-        data, type_data = get_latest_klines(client, coin_type, interval, total_length)
+        data, type_data = get_latest_klines(client, coin_type, interval, total_length + 1)
         # 初始化趋势生成器
         backtester = Backtester(data, type_data)
         initial_trend_data = backtester.initial_trend_data
@@ -101,15 +103,15 @@ def main():
         trend_tick_calculator = TrendTickCalculator(data, trend_config, filtered_trend_data)
         trend_tick_data = trend_tick_calculator.update_trend_data(data, data[-1, -1] + trend_config["interval"], filtered_trend_data)
         # trader = Trader(data, trend_config, trading_config)
-        initial_filtered_trend_data = filtered_trend_data
-        initial_filtered_trend_data["trend_high"] = filtered_trend_data["trend_high"][:-1]
-        initial_filtered_trend_data["trend_low"] = filtered_trend_data["trend_low"][:-1]
+        # initial_filtered_trend_data = filtered_trend_data
+        # initial_filtered_trend_data["trend_high"] = filtered_trend_data["trend_high"][:-1]
+        # initial_filtered_trend_data["trend_low"] = filtered_trend_data["trend_low"][:-1]
         plotter = Plotter(
                 data[:-1],
                 type_data[:-1],
-                initial_filtered_trend_data,
+                filtered_trend_data,
                 len(data[:-1]),
-                1000,
+                min(len(data) - 10, 500),
                 10,
             )
         
@@ -125,25 +127,34 @@ def main():
             type_data,
         )
         plotter.run()
-        while True:
-            plotter.run()
+        # while True:
+        #     plotter.run()
         
         new_price = NewPrice(client, coin_type, contract_type)
         order_manager = OrderManager()
         trader = RealtimeTrader(data, trend_config, trading_config, order_manager)
-        
+        trader.update_trend_price(data, trend_tick_data)
         
         while True:
             current_tick_info = new_price.__next__()
-            current_time = current_tick_info["time"]# 获取当前时间
-            current_price = current_tick_info["price"]
+            current_time = float(current_tick_info["time"])# 获取当前时间
+            current_price = float(current_tick_info["price"])
             
+            trader.judge_kline_signal(len(data), current_price)
             trader.open_close_signal(current_time, current_price)
 
-            print("未获取到新k线")
-            time.sleep(1)
+            open_signal = trader.open_order_book
+            order_response = open_order(open_signal, client, coin_type, contract_type, coin_info)
+            if order_response is not None:
+                print(order_response)
+                trader.open_order_book = {"high_open":False, "low_open":False}
+                
+            
+            # print("未获取到新k线")
+            # time.sleep(1)
             
             if current_time - data[-1, 7] > time_number(interval) * 1000:
+                time.sleep(1) # 等待1秒，确保服务器时间也更新
                 # 新增K线数
                 kline_num = int((current_time - data[-1, 7]) // (time_number(interval) * 1000) + 1)
                 new_kline, new_type_data = get_latest_klines(client, coin_type, interval, 2)
@@ -287,8 +298,9 @@ def main():
         # 初始化趋势价格计算器
         trend_tick_calculator = TrendTickCalculator(data, trend_config, filtered_trend_data)
         
+        order_manager = OrderManager()
         # # 初始化交易器
-        trader = BacktestTrader(data, trend_config, trading_config)
+        trader = BacktestTrader(data, trend_config, trading_config, order_manager)
 
         # 6. 根据配置决定是否可视化
         if visualize_mode:
@@ -334,7 +346,10 @@ def main():
                     )
                     parquet_index += 1
                     
-                    trader.open_close_signal(data, data[base_trend_number,[1,3,4,5]],trend_tick_data, price_time_array, base_trend_number)
+                    trader.update_trend_price(data, trend_tick_data)
+                    trader.judge_kline_signal(base_trend_number, data[base_trend_number, 1], data[base_trend_number, 3])
+                    
+                    trader.open_close_signal(price_time_array)
                     
                     
                     if trader.paused:
@@ -366,6 +381,8 @@ def main():
 
                     base_trend_number += 1
                     
+                    if base_trend_number >= data.shape[0]:
+                        break
 
 
                     pbar.update(1)
@@ -376,10 +393,10 @@ def main():
             visulize_orderbook(trader)
             # 计算盈利大于0.005的比例
             profits = [order['profit'] for order in trader.order_book]
-            profitable_trades = sum(1 for profit in profits if profit > 0.006)
+            profitable_trades = sum(1 for profit in profits if profit > 0.005)
             total_trades = len(profits)
             profit_ratio = profitable_trades / total_trades if total_trades > 0 else 0
-            print(f"盈利大于0.006的比例: {profit_ratio:.2%}")
+            print(f"盈利大于0.005的比例: {profit_ratio:.2%}")
             
         else:
             # return
@@ -403,13 +420,15 @@ def main():
                     )
                     parquet_index += 1
                     
-                    trader.open_close_signal(data[base_trend_number,[1,3,4,5]],trend_tick_data, price_time_array, base_trend_number)
+                    trader.open_close_signal(data, trend_tick_data, price_time_array, base_trend_number)
                     
 
                     open_signals = trader.open_signals
                     close_signals = trader.close_signals
 
                     base_trend_number += 1
+                    if base_trend_number >= data.shape[0]:
+                        break
 
                     pbar.update(1)
             profits = [order['profit'] for order in trader.order_book]

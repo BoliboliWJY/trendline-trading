@@ -69,7 +69,7 @@ class Backtester:
     def update_trend(self):
         """更新一次趋势数据，并返回更新后的数据; 如果数据结束则返回 False"""
         end_index = self.base_trend_number + self.backtest_count
-        if end_index > len(self.data):
+        if end_index > len(self.data): 
             print("Reached end of data. Stopping the backtest.")
             return False  # 如果数据结束，返回 False
 
