@@ -165,6 +165,7 @@ def main():
                 current_trend = next(trend_generator)
                 # 过滤趋势
                 filtered_trend_data = filter_trend.process_new_trend(
+                    data,
                     filtered_trend_data,
                     current_trend,
                 )
@@ -333,6 +334,7 @@ def main():
                     
                     # 过滤趋势
                     filtered_trend_data = filter_trend.process_new_trend(
+                        data,
                         filtered_trend_data,
                         current_trend,
                     )
@@ -407,6 +409,7 @@ def main():
                     
                     # 过滤趋势
                     filtered_trend_data = filter_trend.process_new_trend(
+                        data,
                         filtered_trend_data,
                         current_trend,
                     )
@@ -508,6 +511,7 @@ def exhaustive_mode(basic_config, backtest_tick_price, data, type_data, base_tre
         for current_trend in backtester.run_backtest():
             # 过滤趋势
             filtered_trend_data = filter_trend.process_new_trend(
+                data,
                 initial_filtered_trend_data,
                 current_trend,
             )

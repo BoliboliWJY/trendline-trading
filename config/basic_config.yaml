@@ -48,7 +48,7 @@ backtest_config:
 # 过滤趋势配置参数
 trend_config:
   interval: '5m'              # 注意此处与顶层 interval 保持一致，可在代码中转换成毫秒
-  enable_filter: 1 # 是否启用过滤
+  enable_filter: True # 是否启用过滤
   delay: 5                   # 生成延迟, 2为无延迟
   filter_slope: False       # 斜率大小限制: False 表示不过滤
   slope_threshold: 0.0001      # 最大斜率阈值

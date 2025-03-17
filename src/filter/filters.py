@@ -297,11 +297,13 @@ class trend_filter:
         trend[-1] = new_last_row
         return trend
 
-    def process_new_trend(self, filtered_trend_data, current_trend):
+    def process_new_trend(self, data, filtered_trend_data, current_trend):
         """处理新的趋势"""
         # 添加新的趋势
         if not self.config.get("enable_filter", False):
             return current_trend
+        
+        self.data = data
         
         filtered_trend_data["trend_high"].append(current_trend["trend_high"][-self.config.get("delay", 10)])
         filtered_trend_data["trend_low"].append(current_trend["trend_low"][-self.config.get("delay", 10)])

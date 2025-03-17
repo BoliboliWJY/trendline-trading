@@ -23,11 +23,13 @@ class CoinInfo:
         
         self.min_qty = None
         self.step_size = None
+        self.price_precision = None
         for flit in target_info["filters"]:
             if flit["filterType"] == "LOT_SIZE":
                 self.min_qty = float(flit["minQty"])
                 self.step_size = float(flit["stepSize"])
-                break
+            elif flit["filterType"] == "PRICE_FILTER":
+                self.price_precision = float(flit["tickSize"])
             
         leverage_info = client.leverage_brackets(symbol=coin_type)
         self.applicable_leverage = None
@@ -46,6 +48,14 @@ class CoinInfo:
         adjusted_qty = math.ceil(raw_qty * (10 ** precision)) / (10 ** precision)
         
         return adjusted_qty
+        
+    def get_price_precision(self):
+        """获取价格精度
+
+        Returns:
+            float: 价格精度（tickSize）
+        """
+        return self.price_precision
         
     
 

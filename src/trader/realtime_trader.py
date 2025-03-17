@@ -81,11 +81,11 @@ class RealtimeTrader:
         
         if self.sell_open_potential_signal or self.sell_open_potential_signal_last:
             self.lock = True # 锁定信号
-            self.trend_high_idx, self.sell_open_potential_signal = self.process_open_signal(self.trend_price_high, tick_price, time, "SELL", "high_open", self.trend_high_idx)
+            self.trend_high_idx, self.sell_open_potential_signal_last = self.process_open_signal(self.trend_price_high, tick_price, time, "SELL", "high_open", self.trend_high_idx)
             
         if self.buy_open_potential_signal or self.buy_open_potential_signal_last:
             self.lock = True # 锁定信号
-            self.trend_low_idx, self.buy_open_potential_signal = self.process_open_signal(self.trend_price_low, tick_price, time, "BUY", "low_open", self.trend_low_idx)
+            self.trend_low_idx, self.buy_open_potential_signal_last = self.process_open_signal(self.trend_price_low, tick_price, time, "BUY", "low_open", self.trend_low_idx)
             
         
     def process_open_signal(self, trend_price, tick_price, time, side, open_signal_key, trend_idx):
