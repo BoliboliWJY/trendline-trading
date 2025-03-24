@@ -48,6 +48,7 @@ class RealtimeTrader:
 
     def judge_kline_signal(self, base_trend_number, max_price, min_price = None):
         # 实盘状态下max_price输入为当前tick数据，不输入min_price，需要覆盖min_price
+        self.reset_open_order_book() # 重置开仓订单
         if min_price is None: 
             min_price = max_price
         
@@ -55,21 +56,26 @@ class RealtimeTrader:
             self.base_trend_number = base_trend_number
             self.lock = False
         
+        # if self.sell_open_potential_signal or self.buy_open_potential_signal: # 上一次没有开仓信号，则继续锁定信号
+        #     self.lock = True
+        
         if self.lock: # 信号被锁定，不进行信号判断
             return
         
         self.paused = False
-        sell_enter_val = 1 - max_price / self.trend_price_high[0] if self.trend_price_high.size > 0 else self.trading_config["enter_threshold"] + 1
-        sell_profit_val = 1 - self.trend_price_low[0] / max_price if self.trend_price_low.size > 0 else 1
-        buy_enter_val = 1 - self.trend_price_low[0] / min_price if self.trend_price_low.size > 0 else self.trading_config["enter_threshold"] + 1
-        buy_profit_val = 1 - min_price / self.trend_price_high[0] if self.trend_price_high.size > 0 else 1
+        sell_enter_val = 1 - max_price / self.trend_price_high[self.trend_high_idx] if self.trend_price_high.size > self.trend_high_idx else self.trading_config["enter_threshold"] + 1
+        sell_profit_val = 1 - self.trend_price_low[self.trend_low_idx] / max_price if self.trend_price_low.size > self.trend_low_idx else 1
+        buy_enter_val = 1 - self.trend_price_low[self.trend_low_idx] / min_price if self.trend_price_low.size > self.trend_low_idx else self.trading_config["enter_threshold"] + 1
+        buy_profit_val = 1 - min_price / self.trend_price_high[self.trend_high_idx] if self.trend_price_high.size > self.trend_high_idx else 1
         
         if sell_enter_val < self.trading_config["enter_threshold"] and sell_profit_val > self.trading_config["potential_profit"]:
             # self.paused = True
             self.sell_open_potential_signal = True
+            self.buy_open_potential_signal = False
         elif buy_enter_val < self.trading_config["enter_threshold"] and buy_profit_val > self.trading_config["potential_profit"]:
             # self.paused = True
             self.buy_open_potential_signal = True
+            self.sell_open_potential_signal = False
         else:
             self.paused = False
             self.buy_open_potential_signal = False
@@ -82,10 +88,12 @@ class RealtimeTrader:
         if self.sell_open_potential_signal or self.sell_open_potential_signal_last:
             self.lock = True # 锁定信号
             self.trend_high_idx, self.sell_open_potential_signal_last = self.process_open_signal(self.trend_price_high, tick_price, time, "SELL", "high_open", self.trend_high_idx)
+            self.sell_open_potential_signal = False # 重置卖出本次开仓信号
             
         if self.buy_open_potential_signal or self.buy_open_potential_signal_last:
             self.lock = True # 锁定信号
             self.trend_low_idx, self.buy_open_potential_signal_last = self.process_open_signal(self.trend_price_low, tick_price, time, "BUY", "low_open", self.trend_low_idx)
+            self.buy_open_potential_signal = False # 重置买入本次开仓信号
             
         
     def process_open_signal(self, trend_price, tick_price, time, side, open_signal_key, trend_idx):
@@ -99,15 +107,17 @@ class RealtimeTrader:
             side: "BUY" 或 "SELL"，对应订单类型
             open_signal_key: "high_open" 或 "low_open"
             trend_idx: 趋势线索引
+        Returns:
+            trend_idx: 趋势线索引
+            last_signal: 是否保留开仓信号
         """
-        last_signal = False # 初始化last_signal
         # True为发生，False为未发生
         break_signal, trend_idx = self.judge_signal(trend_price, tick_price, trend_idx, side, "break") # 打破趋势线信号
         leave_signal, trend_idx = self.judge_signal(trend_price, tick_price, trend_idx, side, "leave") # 离开开仓信号
         
         if break_signal: # 打破趋势线
             self.lock = False # 不锁定信号
-            return trend_idx, last_signal # 返回新趋势线下标
+            return trend_idx, False # 返回新趋势线下标，并确保信号不再触发
         
         if leave_signal: # 出现开仓信号, 执行开仓操作
             current_time = time
@@ -121,11 +131,12 @@ class RealtimeTrader:
                 self.buy_open_potential_signal_last = False
             
             self.lock = False # 关闭锁定信号
+            return trend_idx, False # 开仓后确保不再触发信号
         else: # 没有出现开仓信号
-            last_signal = True # 上一根k线有开仓信号
+            return trend_idx, True # 没有开仓信号，返回True
         
-        return trend_idx, last_signal
         
+
     def judge_signal(self, trend_price, tick_price, trend_idx, side, mode="break"):
         """
         判断离开信号
@@ -147,6 +158,9 @@ class RealtimeTrader:
                 return True, trend_idx
             else:
                 return False, trend_idx
+        
+    def reset_open_order_book(self):
+        self.open_order_book = {"high_open":False, "low_open":False}
         
         
         

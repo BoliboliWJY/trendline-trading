@@ -20,7 +20,6 @@ from src.coin_info import CoinInfo
 
 # from binance import Client
 from src.config_manager import load_basic_config
-from src.trend_calculator.trend_process import initial_single_slope, calculate_trend
 from src.filter.filters import trend_filter
 from src.time_number import time_number
 from src.latest_data.new_price import NewPrice
@@ -101,7 +100,7 @@ def main():
         )
         # 初始化趋势价格计算器
         trend_tick_calculator = TrendTickCalculator(data, trend_config, filtered_trend_data)
-        trend_tick_data = trend_tick_calculator.update_trend_data(data, data[-1, -1] + trend_config["interval"], filtered_trend_data)
+        trend_tick_data = trend_tick_calculator.update_trend_data(data, filtered_trend_data, data[-1, -1] + trend_config["interval"])
         # trader = Trader(data, trend_config, trading_config)
         # initial_filtered_trend_data = filtered_trend_data
         # initial_filtered_trend_data["trend_high"] = filtered_trend_data["trend_high"][:-1]
@@ -136,18 +135,23 @@ def main():
         trader.update_trend_price(data, trend_tick_data)
         
         while True:
-            current_tick_info = new_price.__next__()
+            try:
+                current_tick_info = new_price.__next__()
+            except Exception as e:
+                print("获取实时价格失败，错误原因：",e)
+                time.sleep(1)
+                continue
             current_time = float(current_tick_info["time"])# 获取当前时间
             current_price = float(current_tick_info["price"])
             
             trader.judge_kline_signal(len(data), current_price)
             trader.open_close_signal(current_time, current_price)
 
-            open_signal = trader.open_order_book
-            order_response = open_order(open_signal, client, coin_type, contract_type, coin_info)
-            if order_response is not None:
-                print(order_response)
-                trader.open_order_book = {"high_open":False, "low_open":False}
+            # open_signal = trader.open_order_book
+            # order_response = open_order(open_signal, client, coin_type, contract_type, coin_info)
+            # if order_response is not None:
+            #     print(order_response)
+            #     trader.open_order_book = {"high_open":False, "low_open":False}
                 
             
             # print("未获取到新k线")
@@ -157,7 +161,12 @@ def main():
                 time.sleep(1) # 等待1秒，确保服务器时间也更新
                 # 新增K线数
                 kline_num = int((current_time - data[-1, 7]) // (time_number(interval) * 1000) + 1)
-                new_kline, new_type_data = get_latest_klines(client, coin_type, interval, 2)
+                try:
+                    new_kline, new_type_data = get_latest_klines(client, coin_type, interval, 2)
+                except Exception as e:
+                    print(e)
+                    time.sleep(1)
+                    continue
                 data = np.concatenate((data, new_kline), axis=0)
                 type_data = np.concatenate((type_data, new_type_data), axis=0)
                 # 更新趋势数据
@@ -170,7 +179,7 @@ def main():
                     current_trend,
                 )
                 # 计算趋势价格
-                trend_tick_data = trend_tick_calculator.update_trend_data(data, current_time, filtered_trend_data)
+                trend_tick_data = trend_tick_calculator.update_trend_data(data, filtered_trend_data, current_time)
                 trader.update_trend_price(data, trend_tick_data)
                 
                 
@@ -188,6 +197,9 @@ def main():
 
                 plotter.run()
                 
+                if plotter.enable_visualization:
+                        plotter.save_frame(coin_type)
+                
                 
         
 
@@ -196,114 +208,125 @@ def main():
         # ---------------------
         # 回测模式
         # ---------------------
-        # 1. 读取回测所需的时间区间，并转换为时间戳
         backtest_config = basic_config["backtest_config"]
-        backtest_start_time_str = backtest_config["backtest_start_time"]
-        backtest_end_time_str = backtest_config["backtest_end_time"]
-        backtest_calculate_time_str = backtest_config["backtest_calculate_time"]
-
-        # 获取历史tick数据（回测时段的数据）
-        backtest_tick_price = BacktestTickPriceManager(
-            coin_type, backtest_calculate_time_str, backtest_end_time_str, contract_type
-        )
-
-        backtest_start_time = int(
-            datetime.datetime.strptime(backtest_start_time_str, "%Y-%m-%d")
-            .replace(
-                tzinfo=datetime.timezone(datetime.timedelta(hours=8))
-            )  # 使用 UTC+8 时区
-            .timestamp()
-        )
-        backtest_end_time = int(
-            datetime.datetime.strptime(backtest_end_time_str, "%Y-%m-%d")
-            .replace(
-                tzinfo=datetime.timezone(datetime.timedelta(hours=0))
-            )  # 使用 UTC+0 时区
-            .timestamp()
-        )
-
-        # 2. 计算数据长度（这里将时间间隔转化为秒数进行整除）
-        length = int((backtest_end_time - backtest_start_time) // time_number(interval))
-
-        # 3. 获取历史k线数据（回测时段的数据）
-        data, type_data = data_getter(
-            client, coin_type, interval, length, backtest_start_time, backtest_end_time, contract_type
-        )
-
-        elapsed_time = time.perf_counter() - start_time
-        print(f"获取数据耗时: {elapsed_time:.6f} 秒")
-
-        # 4. 计算回测起始计算点的索引（转换到毫秒单位后查找对应数据位置）
-        backtest_calculate_time = (
-            int(
-                datetime.datetime.strptime(backtest_calculate_time_str, "%Y-%m-%d")
-                .replace(
-                    tzinfo=datetime.timezone(datetime.timedelta(hours=0))
-                )  # 使用 UTC+0 时区
+        date_ranges = backtest_config["date_ranges"]
+        
+        all_data = []
+        all_type_data = []
+        all_base_trend_numbers = []
+        all_parquet_filenames = []
+        
+        for date_range in date_ranges:
+            start_date = date_range["start_date"]
+            end_date = date_range["end_date"]
+            calculate_date = date_range["calculate_date"]
+            
+            # 转换日期为时间戳
+            start_time = int(
+                datetime.datetime.strptime(start_date, "%Y-%m-%d")
+                .replace(tzinfo=datetime.timezone(datetime.timedelta(hours=8)))
                 .timestamp()
             )
-            * 1000
-        )
-        index = np.searchsorted(data[:, 6], backtest_calculate_time, side="left") - 1 # 搜索开盘时间前一个点
-        if index < len(data):
-            print(
-                f"第一个满足 data[:,0] > aim_time 的索引是 {index}, 时间戳为 {data[index, 0]}"
+            end_time = int(
+                datetime.datetime.strptime(end_date, "%Y-%m-%d")
+                .replace(tzinfo=datetime.timezone(datetime.timedelta(hours=0)))
+                .timestamp()
             )
-        else:
-            print("未找到满足 data[:,0] > aim_time 的数据点")
-
-        visualize_mode = basic_config["visualize_mode"]
-        visual_number = basic_config["visual_number"]
-        base_trend_number = index + 1  # 可根据需要固定，也可以用 index
-
-        parquet_filename = f"backtest/{contract_type}/tick/{coin_type}/parquet/{interval}/{coin_type}_{interval}_{backtest_calculate_time_str}_{backtest_end_time_str}"
-        backtest_tick_price.package_data(
-            data[base_trend_number:, 6], data[base_trend_number:, 7], parquet_filename
-        )
-        # data = backtest_tick_price.modify_data(
-        #     data,
-        #     base_trend_number,
-        #     parquet_filename,
-        #     coin_type,
-        #     interval,
-        #     length,
-        #     backtest_start_time,
-        #     backtest_end_time,
-        #     contract_type,
-        # )
-        parquet_index = 1
-
-        # TODO:在这里开始正式回测
-        # 趋势参数
-        if basic_config["exhaustive_mode"]:
-            exhaustive_mode(basic_config, backtest_tick_price, data, type_data, base_trend_number, parquet_filename, parquet_index)
-            return
-        # else:
-        #     return
-
-
+            
+            # 计算数据长度
+            length = int((end_time - start_time) // time_number(interval))
+            
+            # 获取历史k线数据
+            data, type_data = data_getter(
+                client, coin_type, interval, length, start_time, end_time, contract_type
+            )
+            
+            # 计算回测起始计算点的索引
+            calculate_time = int(
+                datetime.datetime.strptime(calculate_date, "%Y-%m-%d")
+                .replace(tzinfo=datetime.timezone(datetime.timedelta(hours=0)))
+                .timestamp() * 1000
+            )
+            index = np.searchsorted(data[:, 6], calculate_time, side="left") - 1
+            
+            if index < len(data):
+                print(f"日期范围 {start_date} 到 {end_date} 的起始计算点索引: {index}, 时间戳: {data[index, 0]}")
+            else:
+                print(f"警告：日期范围 {start_date} 到 {end_date} 未找到合适的计算点")
+                continue
+                
+            base_trend_number = index + 1
+            
+            # 生成parquet文件名
+            parquet_filename = f"backtest/{contract_type}/tick/{coin_type}/parquet/{interval}/{coin_type}_{interval}_{calculate_date}_{end_date}"
+            
+            # 初始化tick价格管理器并处理数据
+            backtest_tick_price = BacktestTickPriceManager(
+                coin_type, calculate_date, end_date, contract_type
+            )
+            
+            # 保存tick数据
+            backtest_tick_price.package_data(
+                data[base_trend_number:, 6], 
+                data[base_trend_number:, 7], 
+                parquet_filename
+            )
+            
+            # 修改数据
+            data = backtest_tick_price.modify_data(
+                data,
+                base_trend_number,
+                parquet_filename,
+                coin_type,
+                interval,
+                length,
+                start_time,
+                end_time,
+                contract_type,
+            )
+            
+            # 保存处理后的数据
+            all_data.append(data)
+            all_type_data.append(type_data)
+            all_base_trend_numbers.append(base_trend_number)
+            all_parquet_filenames.append(parquet_filename)
+            
+            print(f"完成日期范围 {start_date} 到 {end_date} 的数据处理")
         
-        # 开始回测
+        # 合并所有数据
+        data = np.concatenate(all_data, axis=0)
+        type_data = np.concatenate(all_type_data, axis=0)
+        
+        # 计算累积的base_trend_numbers
+        cumulative_base_trend_numbers = []
+        current_sum = 0
+        for base_trend_number in all_base_trend_numbers:
+            current_sum += base_trend_number
+            cumulative_base_trend_numbers.append(current_sum)
         
         # 初始化回测器
-        backtester = Backtester(data, type_data, base_trend_number)
+        backtester = Backtester(data, type_data, cumulative_base_trend_numbers[0])
         initial_trend_data = backtester.initial_trend_data
+        
         # 过滤趋势
-        filter_trend = trend_filter(data,trend_config)
-        # 初始过滤趋势数据
+        filter_trend = trend_filter(data, trend_config)
         filtered_trend_data = filter_trend.filter_trend_initial(
             initial_trend_data["trend_high"],
             initial_trend_data["trend_low"],
-        )  
+        )
         
         # 初始化趋势价格计算器
         trend_tick_calculator = TrendTickCalculator(data, trend_config, filtered_trend_data)
         
         order_manager = OrderManager()
-        # # 初始化交易器
         trader = BacktestTrader(data, trend_config, trading_config, order_manager)
-
-        # 6. 根据配置决定是否可视化
+        
+        # 开始回测
+        visualize_mode = basic_config["visualize_mode"]
+        visual_number = basic_config["visual_number"]
+        base_trend_number = cumulative_base_trend_numbers[0]
+        parquet_filename = all_parquet_filenames[0]
+        
         if visualize_mode:
             cache_len = 1000  # 缓存长度
             if base_trend_number < visual_number:
@@ -318,14 +341,10 @@ def main():
                 cache_len,
             )
             
-            base_trend_number += 1
-            # start_time = time.time()
-            # backtester.run_backtest()
-            # backtester.run_backtest()
-            
             idx_draw = 0
             
-            
+            num_allow_draw = 0
+            # HACK：这里开始循环回测
             with tqdm(desc="Backtesting Progress", mininterval=1) as pbar:
                 for current_trend in backtester.run_backtest():
                     while plotter.paused:
@@ -340,33 +359,30 @@ def main():
                     )
                     
                     # 计算趋势价格
-                    trend_tick_data = trend_tick_calculator.update_trend_data(data, data[base_trend_number, -1], filtered_trend_data)
+                    trend_tick_data = trend_tick_calculator.update_trend_data(data, filtered_trend_data, data[base_trend_number, 0], data[base_trend_number, 2])
                     
                     # 获取价格时间数组
                     price_time_array = backtest_tick_price.package_data_loader(
-                        parquet_index, parquet_filename
+                        base_trend_number, parquet_filename
                     )
-                    parquet_index += 1
                     
                     trader.update_trend_price(data, trend_tick_data)
                     trader.judge_kline_signal(base_trend_number, data[base_trend_number, 1], data[base_trend_number, 3])
                     
-                    trader.open_close_signal(price_time_array)
-                    
+                    trader.open_close_signal(data, trend_tick_data, price_time_array, base_trend_number)
                     
                     if trader.paused:
                         plotter.enable_visualization = True
                     else:
                         plotter.enable_visualization = False
+                        num_allow_draw = 0
+                        
+                    
                     open_signals = trader.open_signals
                     close_signals = trader.close_signals
                     
-                    # plotter.enable_visualization = True
-                    
-                    # price_time_array = np.array([])
-                    
                     plotter.update_plot(
-                        filtered_trend_data,
+                        current_trend,
                         open_signals,
                         close_signals,
                         data[base_trend_number, -1],
@@ -386,12 +402,10 @@ def main():
                     if base_trend_number >= data.shape[0]:
                         break
 
-
                     pbar.update(1)
 
             print("回测可视化已结束，继续后续操作...")
             
-            # print(trader.order_book)
             visulize_orderbook(trader)
             # 计算盈利大于0.005的比例
             profits = [order['profit'] for order in trader.order_book]
@@ -401,9 +415,7 @@ def main():
             print(f"盈利大于0.005的比例: {profit_ratio:.2%}")
             
         else:
-            # return
             base_trend_number += 1
-            # start_time = time.time()
             with tqdm(desc="Backtesting Progress", mininterval=1) as pbar:
                 for current_trend in backtester.run_backtest():
                     
@@ -415,13 +427,12 @@ def main():
                     )
                     
                     # 计算趋势价格
-                    trend_tick_data = trend_tick_calculator.update_trend_data(data, data[base_trend_number, -1], filtered_trend_data)
+                    trend_tick_data = trend_tick_calculator.update_trend_data(data, filtered_trend_data, data[base_trend_number, 0], data[base_trend_number, 2])
                     
                     # 获取价格时间数组
                     price_time_array = backtest_tick_price.package_data_loader(
-                        parquet_index, parquet_filename
+                        base_trend_number, parquet_filename
                     )
-                    parquet_index += 1
                     
                     trader.open_close_signal(data, trend_tick_data, price_time_array, base_trend_number)
                     
@@ -516,7 +527,7 @@ def exhaustive_mode(basic_config, backtest_tick_price, data, type_data, base_tre
                 current_trend,
             )
             # 计算趋势价格
-            trend_tick_data = trend_tick_calculator.update_trend_data(data, data[temp_base_trend_number, -1], filtered_trend_data)
+            trend_tick_data = trend_tick_calculator.update_trend_data(data, filtered_trend_data, data[temp_base_trend_number, 0], data[temp_base_trend_number, 2])
             # 获取价格时间数组
             price_time_array = backtest_tick_price.package_data_loader(
                 temp_parquet_index, parquet_filename

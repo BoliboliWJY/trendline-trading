@@ -51,8 +51,8 @@ def setup_plot_lines(plot, visual_number):
         )
 
     # 初始化趋势线
-    trend_pen_high = pg.mkPen(color="green", width=0.5, style=QtCore.Qt.SolidLine)
-    trend_pen_low = pg.mkPen(color="red", width=0.5, style=QtCore.Qt.SolidLine)
+    trend_pen_high = pg.mkPen(color=(0, 255, 0, 100), width=0.5, style=QtCore.Qt.SolidLine)
+    trend_pen_low = pg.mkPen(color=(255, 0, 0, 100), width=0.5, style=QtCore.Qt.SolidLine)
     plot_lines["trend_high"] = plot.plot([], [], pen=trend_pen_high, name="Trend High")
     plot_lines["trend_low"] = plot.plot([], [], pen=trend_pen_low, name="Trend Low")
 

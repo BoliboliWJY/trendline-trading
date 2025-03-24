@@ -50,6 +50,7 @@ class BacktestTickPriceManager:
             self.combined_df = self.combined_df.with_columns((pl.col("time") / 1000).alias("time"))
 
         time_series = self.combined_df["time"]
+        
         for i, (start_time, end_time) in enumerate(zip(start_time_number, end_time_number)):
             # 构建输出文件名
             filename = f"{base_filename}_chunk_{i}.parquet"

@@ -37,8 +37,11 @@ class TrendTickCalculator:
             b = y1 - k * x1
             self.trend_low_intercepts_dict[trend] = (k, b)
         
-    def update_trend_data(self, data:np.ndarray, current_time:int, current_trend:dict):
+    def update_trend_data(self, data:np.ndarray, current_trend:dict, current_time_high:int, current_time_low = None):
         """更新趋势数据"""
+        if current_time_low is None: # 判断是实时还是回测情况
+            current_time_high = current_time_high
+            current_time_low = None
         # 新增项
         new_trend_high_set = {tuple(item) for item in current_trend["trend_high"][-1]}
         if new_trend_high_set:
@@ -87,8 +90,12 @@ class TrendTickCalculator:
         self.trend_high_intercepts = np.array(list(self.trend_high_intercepts_dict.values()))
         self.trend_low_intercepts = np.array(list(self.trend_low_intercepts_dict.values()))
         
-        self.trend_price_high = self.calculate_trend_klines_price(data, current_time, self.trend_high_intercepts)
-        self.trend_price_low = self.calculate_trend_klines_price(data, current_time, self.trend_low_intercepts)
+        if current_time_low is None:
+            self.trend_price_high = self.calculate_trend_klines_price(data, current_time_high, self.trend_high_intercepts)
+            self.trend_price_low = self.calculate_trend_klines_price(data, current_time_high, self.trend_low_intercepts)
+        else:
+            self.trend_price_high = self.calculate_trend_klines_price(data, current_time_high, self.trend_high_intercepts)
+            self.trend_price_low = self.calculate_trend_klines_price(data, current_time_low, self.trend_low_intercepts)
         
         # 对 high 趋势价格按照第二列（价格）进行升序排序
         sorted_trend_price_high = self.trend_price_high[self.trend_price_high[:, 1].argsort()]
