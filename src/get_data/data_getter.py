@@ -1,8 +1,8 @@
 import os
 import time
 import numpy as np
-from src.get_data.backtest_filename_getter import get_backtest_filename
-from src.get_data.get_data_in_batches import get_data_in_batches
+from src.get_data import get_backtest_filename
+from src.get_data import get_data_in_batches
 
 def data_getter(client,coin_type,interval,length,backtest_start_time,backtest_end_time,contract_type):
     filename, typename = get_backtest_filename(coin_type, interval, length, backtest_start_time, backtest_end_time,contract_type)

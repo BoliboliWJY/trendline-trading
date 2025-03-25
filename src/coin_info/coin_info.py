@@ -1,17 +1,15 @@
 import math
 class CoinInfo:
-    def __init__(self, client, coin_type, contract_type, min_amount):
+    def __init__(self, client, coin_type, min_amount):
         """初始化币种信息
 
         Args:
             client (UMFutures): 币安客户端
             coin_type (str): 币种名称
-            contract_type (str): 合约类型
             min_amount (float): 最小交易金额
         """
         self.client = client
         self.coin_type = coin_type
-        self.contract_type = contract_type
         self.min_amount = min_amount
         
         exchange_info = client.exchange_info()

@@ -6,6 +6,7 @@ import polars as pl
 import numpy as np
 import tqdm
 import time
+from datetime import timedelta
 
 class BacktestTickPriceManager:
     def __init__(
@@ -23,6 +24,9 @@ class BacktestTickPriceManager:
         self.start_date = datetime.strptime(backtest_start_time, "%Y-%m-%d")
         self.end_date = datetime.strptime(backtest_end_time, "%Y-%m-%d")
         # self.tick_price = self.get_tick_price()
+        
+        self.current_load_date = None
+        self.chunk_counter = 0
 
     def package_data(self, start_time_number, end_time_number, base_filename):
         """
@@ -33,9 +37,18 @@ class BacktestTickPriceManager:
         if folder and not os.path.exists(folder):
             os.makedirs(folder)
         # 先检查文件是否已存在，假设只检查第一个 chunk 的存在性
-        first_chunk_file = f"{base_filename}_chunk_0.parquet"
-        if os.path.exists(first_chunk_file):
-            print(f"文件 {first_chunk_file} 已存在，跳过读取和打包。")
+        # first_chunk_file = f"{base_filename}_chunk_0.parquet"
+        current_date = self.start_date
+        all_files_exist = True
+        while current_date <= self.end_date:
+            first_chunk_file = f"{base_filename}_{current_date.strftime('%Y-%m-%d')}_chunk_0.parquet"
+            if not os.path.exists(first_chunk_file):
+                all_files_exist = False
+                break
+            current_date = current_date + timedelta(days=1)
+        
+        if all_files_exist:
+            print(f"文件 {base_filename} 已存在，跳过读取和打包。")
             return
 
         # 如果未检测到文件，则读取 csv 数据后进行后续操作
@@ -51,55 +64,41 @@ class BacktestTickPriceManager:
 
         time_series = self.combined_df["time"]
         
-        for i, (start_time, end_time) in enumerate(zip(start_time_number, end_time_number)):
-            # 构建输出文件名
-            filename = f"{base_filename}_chunk_{i}.parquet"
-            start_idx = time_series.search_sorted(start_time, side="right")
-            end_idx = time_series.search_sorted(end_time, side="left")
-            df_chunk = self.combined_df.slice(start_idx, end_idx - start_idx)
-            df_chunk.write_parquet(filename)
+        current_date = self.start_date
+        while current_date <= self.end_date:
+            date_str = current_date.strftime("%Y-%m-%d")
+            day_start = int(datetime.strptime(f"{date_str} 00:00:00", "%Y-%m-%d %H:%M:%S").timestamp() * 1000)
+            day_end = int(datetime.strptime(f"{date_str} 23:59:59", "%Y-%m-%d %H:%M:%S").timestamp() * 1000)
+            
+            # 为每一天重置chunk计数器
+            chunk_counter = 0
+            os.makedirs(f"{base_filename}", exist_ok=True)
+            for i, (start_time, end_time) in enumerate(zip(start_time_number, end_time_number)):
+                if start_time >= day_start and start_time < day_end:
+                    filename = f"{base_filename}/{date_str}_chunk_{chunk_counter}.parquet"
+                    # 获取时间段数据
+                    start_idx = time_series.search_sorted(start_time, side="right")
+                    end_idx = time_series.search_sorted(min(end_time, day_end), side="left")
+                    
+                    if start_idx < end_idx:
+                        df_chunk = self.combined_df.slice(start_idx, end_idx - start_idx)
+                        df_chunk.write_parquet(filename)
+                        chunk_counter += 1  # 只有成功写入文件后才增加计数器
+            current_date = current_date + timedelta(days=1)
 
+    
     def get_tick_price(self):
-        self.months = []
-        self.current_date = self.start_date.replace(day=1)
-        while self.current_date <= self.end_date:
-            self.months.append(self.current_date.strftime("%Y-%m"))
-            if self.current_date.month == 12:
-                self.current_date = self.current_date.replace(
-                    year=self.current_date.year + 1, month=1
-                )
-            else:
-                self.current_date = self.current_date.replace(
-                    month=self.current_date.month + 1
-                )
-
         self.dfs = []
         self.base_folder = os.path.join("backtest", self.contract_type, "tick", self.coin_type)
-        for month in self.months:
-            csv_file_name = f"{self.coin_type}-trades-{month}.csv"
-            zip_file_name = f"{self.coin_type}-trades-{month}.zip"
+        
+        current_date = self.start_date
+        while current_date <= self.end_date:
+            date_str = current_date.strftime("%Y-%m-%d")
+            zip_file_name = f"{self.coin_type}-trades-{date_str}.zip"
+            csv_file_name = f"{self.coin_type}-trades-{date_str}.csv"
 
             zip_file_path = os.path.join(self.base_folder, zip_file_name)
-            csv_file_path = os.path.join(self.base_folder, csv_file_name)
-
-            # 优先判断csv文件是否存在
-            if os.path.exists(csv_file_path):
-                try:
-                    df = pl.read_csv(csv_file_path)
-                    # 如果没有 "time" 列，则认为 CSV 文件没有标题，
-                    # 按照第二列作为 "price"，第五列作为 "time" 重命名
-                    if "time" not in df.columns:
-                        cols = list(df.columns)
-                        if len(cols) >= 5:
-                            df = df.rename({cols[0]: "id", cols[1]: "price", cols[2]: "qty", cols[3]: "quote_qty", cols[4]: "time", cols[5]: "is_buyer_maker"})
-                        else:
-                            print(f"文件 {csv_file_path} 不含足够列进行重命名.")
-                            continue
-                    self.dfs.append(df)
-                except Exception as e:
-                    print(f"无法读取文件 {csv_file_path}: {e}")
-            # 如果csv文件不存在，则判断压缩包是否存在
-            elif os.path.exists(zip_file_path):
+            if os.path.exists(zip_file_path):
                 try:
                     with zipfile.ZipFile(zip_file_path, "r") as zf:
                         with zf.open(csv_file_name) as f:
@@ -107,21 +106,34 @@ class BacktestTickPriceManager:
                             if "time" not in df.columns:
                                 cols = list(df.columns)
                                 if len(cols) >= 5:
-                                    df = df.rename({cols[0]: "id", cols[1]: "price", cols[2]: "qty", cols[3]: "quote_qty", cols[4]: "time", cols[5]: "is_buyer_maker"})
+                                    df = df.rename({
+                                        cols[0]: "id",
+                                        cols[1]: "price",
+                                        cols[2]: "qty",
+                                        cols[3]: "quote_qty",
+                                        cols[4]: "time",
+                                        cols[5]: "is_buyer_maker"
+                                    })
                                 else:
                                     print(f"压缩包 {zip_file_path} 中的 {csv_file_name} 不含足够列进行重命名.")
+                                    current_date += timedelta(days=1)
                                     continue
                             self.dfs.append(df)
                 except Exception as e:
                     print(f"无法从压缩包 {zip_file_path} 读取文件 {csv_file_name}: {e}")
             else:
-                print(f"未找到文件 {zip_file_path} 或 {csv_file_path}")
-
+                print(f"未找到文件 {zip_file_path}")
+            
+            current_date = current_date + timedelta(days=1)
+        
         if not self.dfs:
             raise Exception("No data found for the given time range.")
-
-        self.combined_df = pl.concat(self.dfs, rechunk=True)
+        
+        self.combined_df = pl.concat(self.dfs, rechunk = True)
+        
         return self.combined_df
+
+
 
     def yield_prices_from_filtered_data(self, lower_bound: int, upper_bound: int):
         """
@@ -155,12 +167,26 @@ class BacktestTickPriceManager:
         filtered_df = self.combined_df.slice(start_idx, end_idx - start_idx)
         return filtered_df
 
-    def package_data_loader(self, chunk_index: int, base_filename: str):
+    def package_data_loader(self, base_filename: str, timestamp: int):
         """
         读取 package_data 打包的数据，并过滤掉相邻时间点中价格相同的记录
+        
+        Args:
+            base_filename: 基础文件名
+            timestamp: 时间戳（毫秒），用于确定具体日期
         """
-        filename = f"{base_filename}_chunk_{chunk_index}.parquet"
         try:
+            date_str = datetime.fromtimestamp(timestamp / 1000).strftime("%Y-%m-%d")
+            # 如果日期发生变化，则重置chunk计数器
+            if date_str != self.current_load_date:
+                self.current_load_date = date_str
+                self.chunk_counter = 0
+            
+            filename = f"{base_filename}/{date_str}_chunk_{self.chunk_counter}.parquet"
+            if not os.path.exists(filename):
+                print(f"Error: 文件 {filename} 未找到。")
+                return None
+            
             # 先读取数据并选取 "price" 和 "time" 列
             df = pl.read_parquet(filename).select(["time", "price"])
             data = df.to_numpy()
@@ -173,6 +199,8 @@ class BacktestTickPriceManager:
             else:
                 filtered_data = data
 
+            # 成功读取后增加计数器
+            self.chunk_counter += 1
             return filtered_data
         except FileNotFoundError:
             print(f"Error: 文件 {filename} 未找到。")
@@ -201,36 +229,51 @@ class BacktestTickPriceManager:
             print(f"Error: 数据为空")
             return data
 
-        # 检查是否已处理：读取第一个chunk的数据，计算第一组的最大价格对应的时间，
-        # 如果 data 中对应位置的时间一致，则跳过后续处理。
+        # 检查是否已处理
+        first_time = data[base_trend_number, 0]
+        first_date = datetime.fromtimestamp(first_time / 1000).strftime("%Y-%m-%d")
+        
         try:
-            first_chunk_filename = f"{base_filename}_chunk_0.parquet"
-            print(f"尝试读取文件: {first_chunk_filename}")  # 添加调试信息
-            if os.path.exists(first_chunk_filename):  # 检查文件是否存在
+            first_chunk_filename = f"{base_filename}/{first_date}_chunk_0.parquet"
+            print(f"尝试读取文件: {first_chunk_filename}")
+            if os.path.exists(first_chunk_filename):
                 print(f"文件存在: {first_chunk_filename}")
                 df_check = pl.read_parquet(first_chunk_filename)
                 arr_check = df_check.select(["price", "time"]).to_numpy()
                 if arr_check.shape[0] > 0:
                     first_max_index = np.argmax(arr_check[:, 0])
                     first_max_time = arr_check[first_max_index, 1]
-                    # 假设第一组的数据在 data 中的索引为 base_trend_number
                     if data[base_trend_number, 0] == first_max_time:
                         print("数据已经处理过，跳过修改。")
                         return data
                 else:
                     print(f"Warning: 文件 {first_chunk_filename} 为空，无法验证是否已处理")
             else:
-                print(f"文件不存在: {first_chunk_filename}")  # 添加调试信息
+                print(f"文件不存在: {first_chunk_filename}")
         except Exception as e:
             print(f"检查数据是否已处理时发生错误: {e}")
 
-        import tqdm
-
+        # 使用字典记录每个日期的chunk计数
+        daily_chunk_counters = {}
+        
         with tqdm.tqdm(
             total=data.shape[0] - base_trend_number, desc="Processing data"
         ) as pbar:
-            for i in tqdm.tqdm(range(data.shape[0] - base_trend_number)):
-                filename = f"{base_filename}_chunk_{i}.parquet"
+            current_date = None
+            chunk_counter = 0
+            
+            for i in range(data.shape[0] - base_trend_number):
+                current_time = data[i + base_trend_number, 0]
+                new_date = datetime.fromtimestamp(current_time / 1000).strftime("%Y-%m-%d")
+                
+                # 如果日期变化，重置计数器
+                if new_date != current_date:
+                    current_date = new_date
+                    chunk_counter = 0
+                    if current_date not in daily_chunk_counters:
+                        daily_chunk_counters[current_date] = 0
+                
+                filename = f"{base_filename}/{current_date}_chunk_{chunk_counter}.parquet"
                 try:
                     df = pl.read_parquet(filename)
                 except Exception as e:
@@ -253,6 +296,9 @@ class BacktestTickPriceManager:
                 data[i + base_trend_number, 2] = min_time
                 data[i + base_trend_number, 1] = max_price
                 data[i + base_trend_number, 3] = min_price
+                
+                chunk_counter += 1
+                pbar.update(1)
 
         self.save_modified_data(
             data, coin_type, interval, length, backtest_start_time, backtest_end_time, contract_type
@@ -275,7 +321,7 @@ class BacktestTickPriceManager:
             backtest_end_time: 回测结束时间
         """
         import numpy as np
-        from src.get_data.backtest_filename_getter import get_backtest_filename
+        from src.get_data import get_backtest_filename
 
         # 根据 coin_type、interval 等参数获取保存的路径和文件名
         filename, typename = get_backtest_filename(
