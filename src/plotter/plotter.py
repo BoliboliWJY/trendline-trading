@@ -131,7 +131,7 @@ class Plotter:
             self.plot_in_one()
 
             # 更新FPS
-            self.update_fps()
+            # self.update_fps()
 
     def update_fps(self):
         self.fps_count += 1

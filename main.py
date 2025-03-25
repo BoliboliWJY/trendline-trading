@@ -83,6 +83,7 @@ def main():
     # 分情况处理：实盘交易模式 / 回测模式
     # --------------------------
     if run_type:
+        from src.coin_info import CoinMonitorManager
         print("实盘交易模式")
         # ---------------------
         # 实盘交易模式
@@ -90,115 +91,134 @@ def main():
         client.ping() # 测试连接
         realtime_config = basic_config["realtime_config"]
         total_length = realtime_config["total_length"]
-
-        data, type_data = get_latest_klines(client, coin_type, interval, total_length + 1)
-        # 初始化趋势生成器
-        backtester = Backtester(data, type_data)
-        initial_trend_data = backtester.initial_trend_data
-        filter_trend = trend_filter(data,trend_config)
-        filtered_trend_data = filter_trend.filter_trend_initial(
-            initial_trend_data["trend_high"],
-            initial_trend_data["trend_low"],
-        )
-        # 初始化趋势价格计算器
-        trend_tick_calculator = TrendTickCalculator(data, trend_config, filtered_trend_data)
-        trend_tick_data = trend_tick_calculator.update_trend_data(data, filtered_trend_data, data[-1, -1] + trend_config["interval"])
-        # trader = Trader(data, trend_config, trading_config)
-        # initial_filtered_trend_data = filtered_trend_data
-        # initial_filtered_trend_data["trend_high"] = filtered_trend_data["trend_high"][:-1]
-        # initial_filtered_trend_data["trend_low"] = filtered_trend_data["trend_low"][:-1]
-        plotter = Plotter(
-                data[:-1],
-                type_data[:-1],
-                filtered_trend_data,
-                len(data[:-1]),
-                min(len(data) - 10, 500),
-                10,
-            )
         
-        plotter.enable_visualization = True
-        plotter.update_plot(
-            filtered_trend_data,
-            {"high_open":[], "low_open":[], "high_open_enter":[], "low_open_enter":[], "sell_close_ideal":[], "buy_close_ideal":[]},
-            {"high_close":[], "low_close":[]},
-            data[-1, -1],
-            np.array([]),
-            trend_tick_data,
-            data,
-            type_data,
-        )
-        plotter.run()
+        coin_types = basic_config.get("coin_types", [coin_type])
+        
+        manager = CoinMonitorManager(client, trend_config, trading_config)
+        for coin_type in coin_types:
+            manager.add_coin(coin_type, contract_type, interval, total_length)
+            
+        manager.start_all()
+        
+        try:
+            while True:
+                pass
+        except KeyboardInterrupt:
+            print("手动停止")
+            manager.stop_all()
+            print("所有监控实例已停止")
+            
+        
+            
+
+        # data, type_data = get_latest_klines(client, coin_type, interval, total_length + 1)
+        # # 初始化趋势生成器
+        # backtester = Backtester(data, type_data)
+        # initial_trend_data = backtester.initial_trend_data
+        # filter_trend = trend_filter(data,trend_config)
+        # filtered_trend_data = filter_trend.filter_trend_initial(
+        #     initial_trend_data["trend_high"],
+        #     initial_trend_data["trend_low"],
+        # )
+        # # 初始化趋势价格计算器
+        # trend_tick_calculator = TrendTickCalculator(data, trend_config, filtered_trend_data)
+        # trend_tick_data = trend_tick_calculator.update_trend_data(data, filtered_trend_data, data[-1, -1] + trend_config["interval"])
+        # # trader = Trader(data, trend_config, trading_config)
+        # # initial_filtered_trend_data = filtered_trend_data
+        # # initial_filtered_trend_data["trend_high"] = filtered_trend_data["trend_high"][:-1]
+        # # initial_filtered_trend_data["trend_low"] = filtered_trend_data["trend_low"][:-1]
+        # plotter = Plotter(
+        #         data[:-1],
+        #         type_data[:-1],
+        #         filtered_trend_data,
+        #         len(data[:-1]),
+        #         min(len(data) - 10, 500),
+        #         10,
+        #     )
+        
+        # plotter.enable_visualization = True
+        # plotter.update_plot(
+        #     filtered_trend_data,
+        #     {"high_open":[], "low_open":[], "high_open_enter":[], "low_open_enter":[], "sell_close_ideal":[], "buy_close_ideal":[]},
+        #     {"high_close":[], "low_close":[]},
+        #     data[-1, -1],
+        #     np.array([]),
+        #     trend_tick_data,
+        #     data,
+        #     type_data,
+        # )
+        # plotter.run()
+        # # while True:
+        # #     plotter.run()
+        
+        # new_price = NewPrice(client, coin_type, contract_type)
+        # order_manager = OrderManager()
+        # trader = RealtimeTrader(data, trend_config, trading_config, order_manager)
+        # trader.update_trend_price(data, trend_tick_data)
+        
         # while True:
-        #     plotter.run()
-        
-        new_price = NewPrice(client, coin_type, contract_type)
-        order_manager = OrderManager()
-        trader = RealtimeTrader(data, trend_config, trading_config, order_manager)
-        trader.update_trend_price(data, trend_tick_data)
-        
-        while True:
-            try:
-                current_tick_info = new_price.__next__()
-            except Exception as e:
-                print("获取实时价格失败，错误原因：",e)
-                time.sleep(1)
-                continue
-            current_time = float(current_tick_info["time"])# 获取当前时间
-            current_price = float(current_tick_info["price"])
+        #     try:
+        #         current_tick_info = new_price.__next__()
+        #     except Exception as e:
+        #         print("获取实时价格失败，错误原因：",e)
+        #         time.sleep(1)
+        #         continue
+        #     current_time = float(current_tick_info["time"])# 获取当前时间
+        #     current_price = float(current_tick_info["price"])
             
-            trader.judge_kline_signal(len(data), current_price)
-            trader.open_close_signal(current_time, current_price)
+        #     trader.judge_kline_signal(len(data), current_price)
+        #     trader.open_close_signal(current_time, current_price)
 
-            open_signal = trader.open_order_book
-            order_response = open_order(open_signal, client, coin_type, contract_type, coin_info)
-            if order_response is not None:
-                print(order_response)
-                trader.open_order_book = {"high_open":False, "low_open":False}
+        #     open_signal = trader.open_order_book
+        #     order_response = open_order(open_signal, client, coin_type, contract_type, coin_info)
+        #     if order_response is not None:
+        #         print(order_response)
+        #         trader.open_order_book = {"high_open":False, "low_open":False}
                 
             
-            if current_time - data[-1, 7] > time_number(interval) * 1000:
-                # 新增K线数
-                kline_num = int((current_time - data[-1, 7]) // (time_number(interval) * 1000) + 1)
-                try:
-                    new_kline, new_type_data = get_latest_klines(client, coin_type, interval, 2)
-                except Exception as e:
-                    print(e)
-                    time.sleep(1)
-                    continue
-                if new_kline[0, 0] == data[-1, 0]: # 如果新k线与当前k线相同，则不更新数据
-                    continue
-                data = np.concatenate((data, new_kline), axis=0)
-                type_data = np.concatenate((type_data, new_type_data), axis=0)
-                # 更新趋势数据
-                trend_generator = backtester.run_backtest(data, type_data)
-                current_trend = next(trend_generator)
-                # 过滤趋势
-                filtered_trend_data = filter_trend.process_new_trend(
-                    data,
-                    filtered_trend_data,
-                    current_trend,
-                )
-                # 计算趋势价格
-                trend_tick_data = trend_tick_calculator.update_trend_data(data, filtered_trend_data, current_time)
-                trader.update_trend_price(data, trend_tick_data)
+        #     if current_time - data[-1, 7] > time_number(interval) * 1000:
+        #         # 新增K线数
+        #         kline_num = int((current_time - data[-1, 7]) // (time_number(interval) * 1000) + 1)
+        #         try:
+        #             new_kline, new_type_data = get_latest_klines(client, coin_type, interval, 2)
+        #         except Exception as e:
+        #             print(e)
+        #             time.sleep(1)
+        #             continue
+        #         if new_kline[0, 0] == data[-1, 0]: # 如果新k线与当前k线相同，则不更新数据
+        #             continue
+        #         data = np.concatenate((data, new_kline), axis=0)
+        #         type_data = np.concatenate((type_data, new_type_data), axis=0)
+        #         # 更新趋势数据
+        #         trend_generator = backtester.run_backtest(data, type_data)
+        #         current_trend = next(trend_generator)
+        #         # 过滤趋势
+        #         filtered_trend_data = filter_trend.process_new_trend(
+        #             data,
+        #             filtered_trend_data,
+        #             current_trend,
+        #         )
+        #         # 计算趋势价格
+        #         trend_tick_data = trend_tick_calculator.update_trend_data(data, filtered_trend_data, current_time)
+        #         trader.update_trend_price(data, trend_tick_data)
                 
                 
-                plotter.enable_visualization = True
-                plotter.update_plot(
-                    filtered_trend_data,
-                    trader.open_signals,
-                    trader.close_signals,
-                    data[-1, -1],
-                    np.array([]),
-                    trend_tick_data,
-                    data,
-                    type_data,
-                )
+        #         plotter.enable_visualization = True
+        #         plotter.update_plot(
+        #             filtered_trend_data,
+        #             trader.open_signals,
+        #             trader.close_signals,
+        #             data[-1, -1],
+        #             np.array([]),
+        #             trend_tick_data,
+        #             data,
+        #             type_data,
+        #         )
 
-                plotter.run()
+        #         plotter.run()
                 
-                if plotter.enable_visualization:
-                        plotter.save_frame(coin_type)
+        #         if plotter.enable_visualization:
+        #                 plotter.save_frame(coin_type)
                 
                 
         
