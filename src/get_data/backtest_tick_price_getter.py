@@ -105,6 +105,7 @@ class BacktestTickPriceManager:
             for i, (start_time, end_time) in enumerate(zip(start_time_number, end_time_number)):
                 if start_time >= day_start and start_time < day_end:
                     filename = f"{base_filename}/{date_str}/chunk_{chunk_counter}.parquet"
+                    filename = f"{base_filename}/{date_str}/chunk_{chunk_counter}.parquet"
                     # 获取时间段数据
                     start_idx = time_series.search_sorted(start_time, side="right")
                     end_idx = time_series.search_sorted(min(end_time, day_end), side="left")
@@ -211,6 +212,7 @@ class BacktestTickPriceManager:
                 self.chunk_counter = 0
             
             filename = f"{base_filename}/{date_str}/chunk_{self.chunk_counter}.parquet"
+            filename = f"{base_filename}/{date_str}/chunk_{self.chunk_counter}.parquet"
             if not os.path.exists(filename):
                 print(f"Error: 文件 {filename} 未找到。")
                 return None
@@ -301,6 +303,7 @@ class BacktestTickPriceManager:
                     if current_date not in daily_chunk_counters:
                         daily_chunk_counters[current_date] = 0
                 
+                filename = f"{base_filename}/{current_date}/chunk_{chunk_counter}.parquet"
                 filename = f"{base_filename}/{current_date}/chunk_{chunk_counter}.parquet"
                 try:
                     df = pl.read_parquet(filename)

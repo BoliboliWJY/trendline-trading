@@ -14,8 +14,15 @@ coin_types:
   - 'APEUSDT'
   - 'SOLUSDT'
 
-# contract_type: 'um' # 'futures' or 'spot'
+# 
+coin_types:
+  - 'BTCUSDT'
+  - 'APEUSDT'
+  - 'SOLUSDT'
+
+contract_type: 'um' # 'futures' or 'spot'
 contract_type: 'um'
+
 
 # aim_time: '2025-2-10  19:30:00'
 # total_length: 10000
@@ -31,7 +38,7 @@ visual_number: 100
 
 
 # 设定运行模式:1为实测，0为回测
-run_type: 0
+run_type: 1
 
 backtest_config:
   backtest_start_time: '2024-10-10'
@@ -87,6 +94,7 @@ trend_config:
 # 交易策略配置参数
 trading_config:
   min_amount: 1 # 最小交易金额
+  min_amount: 50 # 最小交易金额
   open_times: 0 # 限定单k线开仓次数
   # 0.01就是1%
   fee: 0.001 # 手续费
