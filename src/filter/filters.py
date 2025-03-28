@@ -4,9 +4,10 @@ import numpy as np
 
 
 class trend_filter:
-    def __init__(self,data,config):
+    def __init__(self,data,trend_config, time_interval):
         self.data = data
-        self.config = config
+        self.config = trend_config
+        self.time_interval = time_interval
 
         # self.slope_records_high = [[] for _ in range(len(self.trend_high))]
         # self.slope_records_low = [[] for _ in range(len(self.trend_low))]
@@ -59,19 +60,18 @@ class trend_filter:
 
         # 最小距离
         if self.config.get("filter_distance", False):
-            interval = self.config.get("interval", "1000*1000")
             trend_high = self.filter_by_distance(
                 trend_high,
                 self.data,
                 distance_threshold=self.config.get("distance_threshold", 10),
-                interval=interval,
+                interval=self.time_interval,
                 is_high=True,
             )
             trend_low = self.filter_by_distance(
                 trend_low,
                 self.data,
                 distance_threshold=self.config.get("distance_threshold", 10),
-                interval=interval,
+                interval=self.time_interval,
                 is_high=False,
             )
 

@@ -15,11 +15,13 @@ class BacktestTickPriceManager:
         backtest_start_time: str,
         backtest_end_time: str,
         contract_type: str,
+        time_interval,
     ):
         self.coin_type = coin_type
         self.backtest_start_time = backtest_start_time
         self.backtest_end_time = backtest_end_time
         self.contract_type = contract_type
+        self.time_interval = time_interval
 
         self.start_date = datetime.strptime(backtest_start_time, "%Y-%m-%d")
         self.end_date = datetime.strptime(backtest_end_time, "%Y-%m-%d")
@@ -36,22 +38,37 @@ class BacktestTickPriceManager:
         folder = os.path.dirname(base_filename)
         if folder and not os.path.exists(folder):
             os.makedirs(folder)
-        # 先检查文件是否已存在，假设只检查第一个 chunk 的存在性
-        # first_chunk_file = f"{base_filename}_chunk_0.parquet"
+        
+        # 计算每天应该有的chunk数量
+        expected_chunks_per_day = 24 * 60 * 60 // self.time_interval
+        
+        # 检查每天文件是否完整
         current_date = self.start_date
-        all_files_exist = True
+        incomplete_days = []
+        
         while current_date <= self.end_date:
-            first_chunk_file = f"{base_filename}_{current_date.strftime('%Y-%m-%d')}_chunk_0.parquet"
-            if not os.path.exists(first_chunk_file):
-                all_files_exist = False
-                break
+            date_str = current_date.strftime('%Y-%m-%d')
+            day_folder = f"{base_filename}/{date_str}"
+            
+            # 检查文件夹是否存在
+            if not os.path.exists(day_folder):
+                incomplete_days.append(current_date)
+                print(f"日期 {date_str} 的文件夹不存在")
+            else:
+                # 检查实际chunk文件数量
+                actual_chunks = len([f for f in os.listdir(day_folder) if f.startswith("chunk_") and f.endswith(".parquet")])
+                if actual_chunks != expected_chunks_per_day:
+                    incomplete_days.append(current_date)
+                    print(f"日期 {date_str} 的文件数量不一致: 期望 {expected_chunks_per_day}, 实际 {actual_chunks}")
+            
             current_date = current_date + timedelta(days=1)
         
-        if all_files_exist:
-            print(f"文件 {base_filename} 已存在，跳过读取和打包。")
+        if not incomplete_days:
+            print(f"所有日期的文件数量都正确，跳过读取和打包。")
             return
-
-        # 如果未检测到文件，则读取 csv 数据后进行后续操作
+        
+        # 只有当有不完整的日期时才读取csv数据
+        print(f"需要处理的日期: {[d.strftime('%Y-%m-%d') for d in incomplete_days]}")
         self.tick_price = self.get_tick_price()
 
         # 检查 time 字段的最大值是否异常大，
@@ -64,18 +81,30 @@ class BacktestTickPriceManager:
 
         time_series = self.combined_df["time"]
         
-        current_date = self.start_date
-        while current_date <= self.end_date:
+        # 只处理不完整的日期
+        # HACK: 这里记得注释掉
+        incomplete_days = []
+        for current_date in incomplete_days:
             date_str = current_date.strftime("%Y-%m-%d")
             day_start = int(datetime.strptime(f"{date_str} 00:00:00", "%Y-%m-%d %H:%M:%S").timestamp() * 1000)
             day_end = int(datetime.strptime(f"{date_str} 23:59:59", "%Y-%m-%d %H:%M:%S").timestamp() * 1000)
             
+            print(f"处理日期: {date_str}")
+            
+            # 清理当前日期下的所有chunk文件
+            day_folder = f"{base_filename}/{date_str}"
+            if os.path.exists(day_folder):
+                for f in os.listdir(day_folder):
+                    if f.startswith("chunk_") and f.endswith(".parquet"):
+                        os.remove(os.path.join(day_folder, f))
+            
             # 为每一天重置chunk计数器
             chunk_counter = 0
-            os.makedirs(f"{base_filename}", exist_ok=True)
+            os.makedirs(day_folder, exist_ok=True)
+            
             for i, (start_time, end_time) in enumerate(zip(start_time_number, end_time_number)):
                 if start_time >= day_start and start_time < day_end:
-                    filename = f"{base_filename}/{date_str}_chunk_{chunk_counter}.parquet"
+                    filename = f"{base_filename}/{date_str}/chunk_{chunk_counter}.parquet"
                     # 获取时间段数据
                     start_idx = time_series.search_sorted(start_time, side="right")
                     end_idx = time_series.search_sorted(min(end_time, day_end), side="left")
@@ -84,7 +113,6 @@ class BacktestTickPriceManager:
                         df_chunk = self.combined_df.slice(start_idx, end_idx - start_idx)
                         df_chunk.write_parquet(filename)
                         chunk_counter += 1  # 只有成功写入文件后才增加计数器
-            current_date = current_date + timedelta(days=1)
 
     
     def get_tick_price(self):
@@ -182,7 +210,7 @@ class BacktestTickPriceManager:
                 self.current_load_date = date_str
                 self.chunk_counter = 0
             
-            filename = f"{base_filename}/{date_str}_chunk_{self.chunk_counter}.parquet"
+            filename = f"{base_filename}/{date_str}/chunk_{self.chunk_counter}.parquet"
             if not os.path.exists(filename):
                 print(f"Error: 文件 {filename} 未找到。")
                 return None
@@ -234,7 +262,7 @@ class BacktestTickPriceManager:
         first_date = datetime.fromtimestamp(first_time / 1000).strftime("%Y-%m-%d")
         
         try:
-            first_chunk_filename = f"{base_filename}/{first_date}_chunk_0.parquet"
+            first_chunk_filename = f"{base_filename}/{first_date}/chunk_0.parquet"
             print(f"尝试读取文件: {first_chunk_filename}")
             if os.path.exists(first_chunk_filename):
                 print(f"文件存在: {first_chunk_filename}")
@@ -273,7 +301,7 @@ class BacktestTickPriceManager:
                     if current_date not in daily_chunk_counters:
                         daily_chunk_counters[current_date] = 0
                 
-                filename = f"{base_filename}/{current_date}_chunk_{chunk_counter}.parquet"
+                filename = f"{base_filename}/{current_date}/chunk_{chunk_counter}.parquet"
                 try:
                     df = pl.read_parquet(filename)
                 except Exception as e:

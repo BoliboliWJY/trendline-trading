@@ -21,7 +21,7 @@ class PlotWindow(QtWidgets.QWidget):
 
         self.plotter = None  # Will be set by Plotter
         self.setWindowTitle("Data Plotter with FPS")
-        self.resize(1200, 800)
+        self.resize(1920, 1080)
         self.setStyleSheet(
             """
             QWidget {

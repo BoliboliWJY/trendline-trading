@@ -18,7 +18,11 @@ def open_order(open_signal, client, coin_type, contract_type, coin_info, take_pr
     
     # 获取价格精度
     price_precision = coin_info.get_price_precision()
-    price_precision_digits = int(round(-price_precision, 0)) if price_precision < 0 else int(price_precision)
+    if price_precision < 1:
+        import math
+        price_precision_digits = abs(int(math.log10 (price_precision)))
+    else:
+        price_precision_digits = int(price_precision)
     
     # 计算止盈止损价格
     if position_side == "LONG":

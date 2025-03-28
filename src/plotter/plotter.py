@@ -37,7 +37,7 @@ class Plotter:
             self.start_index : self.start_index + self.visual_number + self.delay
         ]
         
-        self.future_number = int(self.visual_number * 0.35)
+        self.future_number = int(self.visual_number * 10)
 
         self.app = QtWidgets.QApplication(sys.argv)
         self.win = PlotWindow()
@@ -131,7 +131,7 @@ class Plotter:
             self.plot_in_one()
 
             # 更新FPS
-            self.update_fps()
+            # self.update_fps()
 
     def update_fps(self):
         self.fps_count += 1
