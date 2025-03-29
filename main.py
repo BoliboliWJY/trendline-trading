@@ -87,7 +87,6 @@ def main():
     # --------------------------
     if run_type:
         from src.coin_info import CoinMonitorManager
-        from src.coin_info import CoinMonitorManager
         print("实盘交易模式")
         # ---------------------
         # 实盘交易模式
