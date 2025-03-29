@@ -101,7 +101,50 @@ class TrendTickCalculator:
         sorted_trend_price_high = self.trend_price_high[self.trend_price_high[:, 1].argsort()]
         # 对 low 趋势价格按照第二列（价格）进行降序排序
         sorted_trend_price_low = self.trend_price_low[self.trend_price_low[:, 1].argsort()[::-1]]
-        return {"trend_price_high": sorted_trend_price_high, "trend_price_low": sorted_trend_price_low}
+        
+        # 计算最新一个k线得趋势价格
+        latest_trend_high_intercepts = []
+        for trend in new_trend_high_set:
+            if trend in self.trend_high_intercepts_dict:
+                latest_trend_high_intercepts.append(self.trend_high_intercepts_dict[trend])
+        
+        latest_trend_low_intercepts = []
+        for trend in new_trend_low_set:
+            if trend in self.trend_low_intercepts_dict:
+                latest_trend_low_intercepts.append(self.trend_low_intercepts_dict[trend])
+        
+        latest_trend_high_intercepts = np.array(latest_trend_high_intercepts)
+        latest_trend_low_intercepts = np.array(latest_trend_low_intercepts)
+        
+        # 计算最新趋势的价格
+        if latest_trend_high_intercepts.size > 0:
+            latest_trend_price_high = self.calculate_trend_klines_price(
+                data, 
+                current_time_high, 
+                latest_trend_high_intercepts
+            )
+            # 按价格升序排序
+            latest_trend_price_high = latest_trend_price_high[latest_trend_price_high[:, 1].argsort()]
+        else:
+            latest_trend_price_high = np.empty((0, 2))
+            
+        if latest_trend_low_intercepts.size > 0:
+            latest_trend_price_low = self.calculate_trend_klines_price(
+                data, 
+                current_time_high if current_time_low is None else current_time_low, 
+                latest_trend_low_intercepts
+            )
+            # 按价格降序排序
+            latest_trend_price_low = latest_trend_price_low[latest_trend_price_low[:, 1].argsort()[::-1]]
+        else:
+            latest_trend_price_low = np.empty((0, 2))
+        
+        # 返回所有趋势的tick数据和最新趋势的tick数据
+        trend_tick_data = {"trend_price_high": sorted_trend_price_high, "trend_price_low": sorted_trend_price_low}
+        latest_trend_tick_data = {"trend_price_high": latest_trend_price_high, "trend_price_low": latest_trend_price_low}
+        
+        
+        return trend_tick_data, latest_trend_tick_data
         
         
         

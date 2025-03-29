@@ -5,8 +5,8 @@ api_secret: 'lytyKr5kvRbNepKJOIAONUkC9yJ819HcBIrlhQwiZ07wicz3jqXZfaIvqG5mE3gd'
 # api_key: "2e54bffe0f994be734967a4ea6786b50954bc0229d815d64fb067511b8733be1"
 # api_secret: "71b59ea564cb76df48ba5d83090e585cdd0b3b02f1923034169f90a48279cd91"
 client_testnet: 0 # 0为真实盘，1为模拟盘
-# coin_type: 'BTCUSDT'
-coin_type: 'APEUSDT'
+coin_type: 'BTCUSDT'
+# coin_type: 'APEUSDT'
 # coin_type: 'SOLUSDT'
 
 coin_types:
@@ -14,15 +14,8 @@ coin_types:
   - 'APEUSDT'
   - 'SOLUSDT'
 
-# 
-coin_types:
-  - 'BTCUSDT'
-  - 'APEUSDT'
-  - 'SOLUSDT'
 
 contract_type: 'um' # 'futures' or 'spot'
-contract_type: 'um'
-
 
 # aim_time: '2025-2-10  19:30:00'
 # total_length: 10000
@@ -33,18 +26,18 @@ contract_type: 'um'
 interval: '5m'
 exhaustive_mode: False # 是否进行穷举,以此优化参数
 visualize_mode: True
-visual_number: 100
+visual_number: 1000
 
 
 
 # 设定运行模式:1为实测，0为回测
-run_type: 1
+run_type: 0
 
 backtest_config:
-  backtest_start_time: '2024-10-10'
+  backtest_start_time: '2024-05-10'
   # backtest_start_time: '2024-11-30'
-  backtest_end_time: '2025-03-27'
-  backtest_calculate_time: '2025-01-07'
+  backtest_end_time: '2024-09-27'
+  backtest_calculate_time: '2024-07-07'
 
 # # 过滤趋势配置参数
 # trend_config:
@@ -81,7 +74,7 @@ trend_config:
   delay: 5                    # 生成延迟, 2为无延迟
   filter_slope: False       # 斜率大小限制: False 表示不过滤
   slope_threshold: 0.0001      # 最大斜率阈值
-  filter_reverse: False     # 反转限制: False 表示不过滤
+  filter_reverse: True     # 反转限制: False 表示不过滤
   filter_line_age: True       # 趋势年龄限制
   min_line_age: 500         # 最小趋势年龄阈值
   filter_distance: True       # 距离限制，不能太近
@@ -94,7 +87,6 @@ trend_config:
 # 交易策略配置参数
 trading_config:
   min_amount: 1 # 最小交易金额
-  min_amount: 50 # 最小交易金额
   open_times: 0 # 限定单k线开仓次数
   # 0.01就是1%
   fee: 0.001 # 手续费
@@ -106,13 +98,13 @@ trading_config:
   leave_threshold: 0.01 # 离开趋势线后，价格与趋势线对应价格差距
   
   number: 1 # 小于阈值的趋势线数量
-  potential_profit: 0.0001 # 潜在利润
+  potential_profit: 0.05 # 潜在利润
 
   update_trend_price_num_threshold: 2 # 更新趋势价格阈值
 
-  trailing_stop_pct: 0.10 # 回撤止损百分比
+  trailing_stop_pct: 0.05 # 回撤止损百分比
 
-  window_size: 30 # 从产生趋势点开始，向后时间窗口大小
+  window_size: 10000 # 从产生趋势点开始，向后时间窗口大小
   profit_pct: 0.02 # 在理论盈利超过设定后进行开仓
 
 # 实时交易配置参数
