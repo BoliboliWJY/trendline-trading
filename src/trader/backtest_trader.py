@@ -16,6 +16,9 @@ class BacktestTrader:
         self.past_trend_high_number = 0
         self.latest_trend_low_number = 0
         self.past_trend_low_number = 0
+        # 开仓时对应的最新趋势数据
+        self.past_last_trend_high = []
+        self.past_last_trend_low = []
         # 多余被删除的趋势数量
         self.missing_trend_high_number = 0
         self.missing_trend_low_number = 0
@@ -40,7 +43,9 @@ class BacktestTrader:
         
         
         
-    def update_trend_price(self, data, trend_price:np.ndarray, base_trend_number:int, latest_trend_high_number:int, latest_trend_low_number:int, latest_deleted_trend_high_number:int, latest_deleted_trend_low_number:int):
+        
+        
+    def update_trend_price(self, data, trend_price:np.ndarray, base_trend_number:int, latest_trend_high:int, latest_trend_low:int, latest_deleted_trend_high_number:int, latest_deleted_trend_low_number:int):
         """
         更新趋势价格
         """
@@ -49,8 +54,10 @@ class BacktestTrader:
         self.low_potential_signal = False
         self.data = data
         self.base_trend_number = base_trend_number
-        self.latest_trend_high_number = latest_trend_high_number
-        self.latest_trend_low_number = latest_trend_low_number
+        self.last_trend_high = latest_trend_high
+        self.last_trend_low = latest_trend_low
+        self.latest_trend_high_number = len(self.last_trend_high)
+        self.latest_trend_low_number = len(self.last_trend_low)
         self.latest_deleted_trend_high_number = latest_deleted_trend_high_number
         self.latest_deleted_trend_low_number = latest_deleted_trend_low_number
         self.trend_price_high = trend_price["trend_price_high"][:, 1] # 对应k线下的价格
@@ -94,50 +101,97 @@ class BacktestTrader:
             # self.latest_trend_low_number -= self.missing_trend_low_number
             self.low_potential_signal = True
             self.missing_trend_low_number = 0
-        
+    
+    # def judge_open_signal(self):
+    #     # 判断是否开仓
+    #     if self.high_potential_signal:
+    #         if len(self.trend_price_low) == 0 or (self.trend_price_high[0] - self.trend_price_low[0]) / self.trend_price_high[0] > self.trading_config["potential_profit"]:
+    #             # 重置趋势低点数量
+    #             self.past_trend_low_number = 0
+                
+    #             self.high_signal_num += 1
+    #             self.low_signal_num = 0
+    #     if self.low_potential_signal:
+    #         if len(self.trend_price_high) == 0 or (self.trend_price_high[0] - self.trend_price_low[0]) / self.trend_price_low[0] > self.trading_config["potential_profit"]:
+    #             # 重置趋势高点数量
+    #             self.past_trend_high_number = 0
+
+    #             self.low_signal_num += 1
+    #             self.high_signal_num = 0
+    #     # 确认开仓发生
+    #     if self.high_signal_num > self.trading_config["open_times"]:
+    #         self.open_signals["high_open"].append([self.data[self.base_trend_number, -1], self.data[self.base_trend_number, 4]])
+            
+    #         self.close_signals["high_close"].append([self.data[self.base_trend_number, -1], self.data[self.base_trend_number, 4] * (1 + self.trading_config["trailing_stop_pct"])])
+            
+    #         # 记录开仓时间
+    #         self.high_idx.append(self.base_trend_number)
+
+    #         self.paused = True
+    #         self.high_signal_num = 0
+            
+    #         self.past_last_trend_high.append(self.last_trend_high.copy())
+
+    #     if self.low_signal_num > self.trading_config["open_times"]:
+    #         self.open_signals["low_open"].append([self.data[self.base_trend_number, -1], self.data[self.base_trend_number, 4]])
+            
+    #         self.close_signals["low_close"].append([self.data[self.base_trend_number, -1], self.data[self.base_trend_number, 4] * (1 - self.trading_config["trailing_stop_pct"])])
+            
+    #         # 记录开仓时间
+    #         self.low_idx.append(self.base_trend_number)
+
+    #         self.paused = True
+    #         self.low_signal_num = 0
+            
+    #         self.past_last_trend_low.append(self.last_trend_low.copy())
+    
     def judge_open_signal(self):
+        # 反向开仓
         # 判断是否开仓
         if self.high_potential_signal:
             if len(self.trend_price_low) == 0 or (self.trend_price_high[0] - self.trend_price_low[0]) / self.trend_price_high[0] > self.trading_config["potential_profit"]:
                 # 重置趋势低点数量
                 self.past_trend_low_number = 0
-                # print("高趋势新增，开仓")
-                # self.open_signals["high_open"].append([self.data[self.base_trend_number, -1], self.data[self.base_trend_number, 4]])
-                # self.paused = True
+                
                 self.high_signal_num += 1
                 self.low_signal_num = 0
         if self.low_potential_signal:
             if len(self.trend_price_high) == 0 or (self.trend_price_high[0] - self.trend_price_low[0]) / self.trend_price_low[0] > self.trading_config["potential_profit"]:
                 # 重置趋势高点数量
                 self.past_trend_high_number = 0
-                # print("低趋势新增，开仓")
-                # self.open_signals["low_open"].append([self.data[self.base_trend_number, -1], self.data[self.base_trend_number, 4]])
-                # self.paused = True
+
                 self.low_signal_num += 1
                 self.high_signal_num = 0
-        # 确认开仓发生
+        # 确认开仓发生 - 实现反向开仓
         if self.high_signal_num > self.trading_config["open_times"]:
+            # 原本是做空，现在改为做多
             self.open_signals["high_open"].append([self.data[self.base_trend_number, -1], self.data[self.base_trend_number, 4]])
             
-            self.close_signals["high_close"].append([self.data[self.base_trend_number, -1], self.data[self.base_trend_number, 4] * (1 + self.trading_config["trailing_stop_pct"])])
+            # 止损点位调整为下跌百分比
+            self.close_signals["high_close"].append([self.data[self.base_trend_number, -1], self.data[self.base_trend_number, 4] * (1 - self.trading_config["trailing_stop_pct"])])
             
-            # 记录开仓时间
-            self.high_idx.append(self.base_trend_number)
-            # profit = self.calculate_profit_loss_high()
+            # 记录开仓时间，但放入 low_idx 而非 high_idx
+            self.low_idx.append(self.base_trend_number)  # 放入低点索引，在计算盈亏时会按做多处理
+
             self.paused = True
             self.high_signal_num = 0
-            # self.place_order("sell", self.data[self.base_trend_number, 4], self.data[self.base_trend_number, -1], 1, profit)
+            
+            self.past_last_trend_high.append(self.last_trend_high.copy())
+
         if self.low_signal_num > self.trading_config["open_times"]:
+            # 原本是做多，现在改为做空
             self.open_signals["low_open"].append([self.data[self.base_trend_number, -1], self.data[self.base_trend_number, 4]])
             
-            self.close_signals["low_close"].append([self.data[self.base_trend_number, -1], self.data[self.base_trend_number, 4] * (1 - self.trading_config["trailing_stop_pct"])])
+            # 止损点位调整为上涨百分比
+            self.close_signals["low_close"].append([self.data[self.base_trend_number, -1], self.data[self.base_trend_number, 4] * (1 + self.trading_config["trailing_stop_pct"])])
             
-            # 记录开仓时间
-            self.low_idx.append(self.base_trend_number)
-            # profit = self.calculate_profit_loss_low()
+            # 记录开仓时间，但放入 high_idx 而非 low_idx
+            self.high_idx.append(self.base_trend_number)  # 放入高点索引，在计算盈亏时会按做空处理
+
             self.paused = True
             self.low_signal_num = 0
-            # self.place_order("buy", self.data[self.base_trend_number, 4], self.data[self.base_trend_number, -1], 1, profit)
+            
+            self.past_last_trend_low.append(self.last_trend_low.copy())
 
     
 

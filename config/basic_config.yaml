@@ -6,8 +6,8 @@ api_secret: 'lytyKr5kvRbNepKJOIAONUkC9yJ819HcBIrlhQwiZ07wicz3jqXZfaIvqG5mE3gd'
 # api_secret: "71b59ea564cb76df48ba5d83090e585cdd0b3b02f1923034169f90a48279cd91"
 client_testnet: 0 # 0为真实盘，1为模拟盘
 # coin_type: 'BTCUSDT'
-coin_type: 'APEUSDT'
-# coin_type: 'SOLUSDT'
+# coin_type: 'APEUSDT'
+coin_type: 'SOLUSDT'
 
 coin_types:
   - 'BTCUSDT'
@@ -33,18 +33,18 @@ contract_type: 'um'
 interval: '5m'
 exhaustive_mode: False # 是否进行穷举,以此优化参数
 visualize_mode: True
-visual_number: 100
+visual_number: 1000
 
 
 
 # 设定运行模式:1为实测，0为回测
-run_type: 1
+run_type: 0
 
 backtest_config:
-  backtest_start_time: '2024-10-10'
+  backtest_start_time: '2023-10-10'
   # backtest_start_time: '2024-11-30'
-  backtest_end_time: '2025-03-27'
-  backtest_calculate_time: '2025-01-07'
+  backtest_end_time: '2025-03-29'
+  backtest_calculate_time: '2024-01-07'
 
 # # 过滤趋势配置参数
 # trend_config:
@@ -106,11 +106,11 @@ trading_config:
   leave_threshold: 0.01 # 离开趋势线后，价格与趋势线对应价格差距
   
   number: 1 # 小于阈值的趋势线数量
-  potential_profit: 0.0001 # 潜在利润
+  potential_profit: 0.01 # 潜在利润
 
   update_trend_price_num_threshold: 2 # 更新趋势价格阈值
 
-  trailing_stop_pct: 0.10 # 回撤止损百分比
+  trailing_stop_pct: 0.04 # 回撤止损百分比
 
   window_size: 30 # 从产生趋势点开始，向后时间窗口大小
   profit_pct: 0.02 # 在理论盈利超过设定后进行开仓

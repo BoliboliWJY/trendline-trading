@@ -223,7 +223,7 @@ def main():
                     trend_tick_data = trend_tick_calculator.update_trend_data(data, filtered_trend_data, data[base_trend_number, 0], data[base_trend_number, 2])
                     
 
-                    trader.update_trend_price(data, trend_tick_data, base_trend_number, len(filtered_trend_data["trend_high"][-1]), len(filtered_trend_data["trend_low"][-1]), len(filtered_trend_data["deleted_high"]), len(filtered_trend_data["deleted_low"]))
+                    trader.update_trend_price(data, trend_tick_data, base_trend_number, filtered_trend_data["trend_high"][-1], filtered_trend_data["trend_low"][-1], len(filtered_trend_data["deleted_high"]), len(filtered_trend_data["deleted_low"]))
                     # trader.judge_kline_signal(base_trend_number, data[base_trend_number, 1], data[base_trend_number, 3])
                     # trader.paused = True
                     if trader.paused:
@@ -618,70 +618,100 @@ def visulize_orderbook(trader):
     from datetime import datetime
     import numpy as np
 
-    # 提取订单信息
+    # Extract order information
     order_ids = [order['order_id'] for order in order_book]
     profits = [order['profit'] for order in order_book]
     tick_times = [order['tick_time'] for order in order_book]
+    order_types = [order['order_type'] for order in order_book]  # Extract order types
 
-    # 创建(时间,利润)元组列表并按时间排序
+    # Create (time, profit, type) tuple list and sort by time
     time_profit_pairs = []
     for i, t in enumerate(tick_times):
         if t >= 0:
             time_obj = datetime.fromtimestamp(t / 1000)
-            time_profit_pairs.append((t, time_obj, profits[i]))
+            time_profit_pairs.append((t, time_obj, profits[i], order_types[i]))
         
-    # 按时间戳排序
+    # Sort by timestamp
     time_profit_pairs.sort(key=lambda x: x[0])
     
-    # 分离排序后的数据
+    # Separate sorted data
     sorted_timestamps = [pair[0] for pair in time_profit_pairs]
     sorted_times = [pair[1] for pair in time_profit_pairs]
     sorted_profits = [pair[2] for pair in time_profit_pairs]
+    sorted_types = [pair[3] for pair in time_profit_pairs]
     
-    # 使用更详细的时间格式
+    # Use more detailed time format
     readable_times = [time_obj.strftime('%m-%d %H:%M') for time_obj in sorted_times]
     
-    # 计算排序后的累计利润
+    # Calculate cumulative profit
     cumulative_profits = np.cumsum(sorted_profits)
 
-    # 创建图形
+    # Create figure
     fig, axs = plt.subplots(2, 1, figsize=(12, 12))
 
-    # 绘制止损和盈利的订单
-    scatter = axs[0].scatter(readable_times, sorted_profits, color='green', label='Profit')
+    # Create colors and markers based on order types
+    colors = ['blue' if t == 'buy' else 'red' for t in sorted_types]
+    markers = ['o' if t == 'buy' else 'x' for t in sorted_types]
     
-    # 每隔n个标签显示一个，避免x轴拥挤
-    n = max(1, len(readable_times) // 20)  # 最多显示约20个标签
+    # Plot all orders with colors by type
+    for i, (time, profit, order_type) in enumerate(zip(readable_times, sorted_profits, sorted_types)):
+        if order_type == 'buy':
+            axs[0].scatter(time, profit, color='blue', marker='o', label='_Buy')
+        else:  # sell
+            axs[0].scatter(time, profit, color='red', marker='x', label='_Sell')
+    
+    # Add a custom legend without duplicates
+    from matplotlib.lines import Line2D
+    legend_elements = [
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='blue', markersize=10, label='Buy (Long)'),
+        Line2D([0], [0], marker='x', color='red', markersize=10, label='Sell (Short)')
+    ]
+    axs[0].legend(handles=legend_elements)
+    
+    # Set x-ticks - show only a subset to avoid crowding
+    n = max(1, len(readable_times) // 20)  # Show approximately 20 labels
     axs[0].set_xticks(readable_times[::n])
     axs[0].set_xticklabels(readable_times[::n], rotation=45)
     
-    # 添加图例和其他设置
-    axs[0].legend()
+    # Add other settings
     axs[0].set_title('Order Profit/Loss Visualization')
-    axs[0].set_xlabel('Tick Time')
-    axs[0].set_ylabel('Profit')
+    axs[0].set_xlabel('Trade Time')
+    axs[0].set_ylabel('Profit/Loss')
     axs[0].axhline(0, color='black', linewidth=0.8, linestyle='--')
     axs[0].grid()
 
-    # 绘制累计利润
-    axs[1].plot(readable_times, cumulative_profits, color='blue', label='Cumulative Profit')
+    # Plot cumulative profit
+    axs[1].plot(readable_times, cumulative_profits, color='green', label='Cumulative Profit')
     axs[1].set_xticks(readable_times[::n])
     axs[1].set_xticklabels(readable_times[::n], rotation=45)
     axs[1].set_title('Cumulative Profit Visualization')
-    axs[1].set_xlabel('Tick Time')
+    axs[1].set_xlabel('Trade Time')
     axs[1].set_ylabel('Cumulative Profit')
     axs[1].axhline(0, color='black', linewidth=0.8, linestyle='--')
     axs[1].grid()
+    axs[1].legend()
 
-    plt.tight_layout()  # 调整布局，避免标签重叠
+    plt.tight_layout()  # Adjust layout to avoid label overlap
     plt.savefig("frames/orderbook.png")
     plt.show()
     
-    # 打印一些统计信息
-    print(f"总交易次数: {len(sorted_profits)}")
-    print(f"总盈利: {sum(sorted_profits):.4f}")
-    print(f"最大单笔盈利: {max(sorted_profits):.4f}")
-    print(f"最大单笔亏损: {min(sorted_profits):.4f}")
+    # Print statistics
+    print(f"Total trades: {len(sorted_profits)}")
+    print(f"Total profit: {sum(sorted_profits):.4f}")
+    print(f"Max single profit: {max(sorted_profits):.4f}")
+    print(f"Max single loss: {min(sorted_profits):.4f}")
+    
+    # Stats by type
+    buy_profits = [p for i, p in enumerate(sorted_profits) if sorted_types[i] == 'buy']
+    sell_profits = [p for i, p in enumerate(sorted_profits) if sorted_types[i] == 'sell']
+    
+    buy_count = len(buy_profits)
+    sell_count = len(sell_profits)
+    buy_profit = sum(buy_profits) if buy_profits else 0
+    sell_profit = sum(sell_profits) if sell_profits else 0
+    
+    print(f"Buy (Long) trades: {buy_count}, Total buy profit: {buy_profit:.4f}")
+    print(f"Sell (Short) trades: {sell_count}, Total sell profit: {sell_profit:.4f}")
 
 if __name__ == "__main__":
     # import cProfile
