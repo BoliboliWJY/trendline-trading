@@ -236,7 +236,7 @@ def main():
                     open_signals = trader.open_signals
                     close_signals = trader.close_signals
                     
-                    # plotter.enable_visualization = True # 常开可视化
+                    plotter.enable_visualization = True # 常开可视化
                     plotter.update_plot(
                         filtered_trend_data,
                         open_signals,

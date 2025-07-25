@@ -1,3 +1,5 @@
 /frames
 /backtest
 
+/__pycache__
+*.pyc

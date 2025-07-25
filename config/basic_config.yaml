@@ -33,7 +33,7 @@ contract_type: 'um'
 interval: '5m'
 exhaustive_mode: False # 是否进行穷举,以此优化参数
 visualize_mode: True
-visual_number: 1000
+visual_number: 100
 
 
 
@@ -41,10 +41,10 @@ visual_number: 1000
 run_type: 0
 
 backtest_config:
-  backtest_start_time: '2023-10-10'
+  backtest_start_time: '2025-1-10'
   # backtest_start_time: '2024-11-30'
-  backtest_end_time: '2025-03-29'
-  backtest_calculate_time: '2024-01-07'
+  backtest_end_time: '2025-05-10'
+  backtest_calculate_time: '2025-04-29'
 
 # # 过滤趋势配置参数
 # trend_config:
@@ -78,16 +78,16 @@ backtest_config:
 #新方案
 trend_config:
   enable_filter: True # 是否启用过滤
-  delay: 5                    # 生成延迟, 2为无延迟
+  delay: 3                    # 生成延迟, 2为无延迟
   filter_slope: False       # 斜率大小限制: False 表示不过滤
   slope_threshold: 0.0001      # 最大斜率阈值
   filter_reverse: False     # 反转限制: False 表示不过滤
   filter_line_age: True       # 趋势年龄限制
-  min_line_age: 500         # 最小趋势年龄阈值
+  min_line_age: 5         # 最小趋势年龄阈值
   filter_distance: True       # 距离限制，不能太近
-  distance_threshold: 300     # 最小距离阈值
+  distance_threshold: 5     # 最小距离阈值
   filter_trending_line: True  # 处于趋势之中的线不考虑
-  filter_trending_line_number: 100  # 连接当前点趋势的线数量阈值
+  filter_trending_line_number: 10  # 连接当前点趋势的线数量阈值
 
   
 
